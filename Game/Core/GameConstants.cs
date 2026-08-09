@@ -24,6 +24,21 @@ namespace TwinStickShooter.Core
         public const float RightStickDeadzone = 0.25f;
         public const float TriggerShootThreshold = 0.35f;
 
+        // --- Balas (Fase 2: pooling) ---
+        public const int MaxBullets = 128;
+        public const float BulletSpeed = 640f;        // px/seg
+        public const float BulletLifetimeSeconds = 1.2f;
+        public const float BulletRadius = 4f;
+        public const float ShootCooldownSeconds = 0.12f; // ~8.3 disparos/seg
+
+        // --- Partículas (Fase 2: struct-based, sin pooling de objetos) ---
+        public const int MaxParticles = 512;
+        public const float ThrusterParticleLifeSeconds = 0.35f;
+        public const float ThrusterParticleSize = 5f;
+        public const float ThrusterEmitIntervalSeconds = 0.03f;
+        public const float MuzzleParticleLifeSeconds = 0.15f;
+        public const float MuzzleParticleSize = 6f;
+
         // Colores por índice de jugador (estilo neón).
         public static readonly Color[] PlayerColors =
         {
