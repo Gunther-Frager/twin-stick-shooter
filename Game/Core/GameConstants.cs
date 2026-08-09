@@ -47,5 +47,15 @@ namespace TwinStickShooter.Core
             new Color(255, 220, 0),   // P3 - Amarillo neón
             new Color(120, 80, 255),  // P4 - Violeta neón
         };
+
+        // --- Mundo (Fase 3: mundo más grande que la pantalla) ---
+        public const int WorldWidth = 2400;
+        public const int WorldHeight = 2400;
+
+        // --- Cámara (Fase 3: dinámica, sigue centro de masa + zoom automático) ---
+        public const float CameraZoomMin = 0.35f;   // Máximo alejamiento
+        public const float CameraZoomMax = 1.0f;    // Máximo acercamiento (1:1)
+        public const float CameraLerpFactor = 0.12f; // Suavizado de movimiento/zoom
+        public const float CameraPadding = 100f;    // Margen extra para que los jugadores no queden pegados al borde
     }
 }

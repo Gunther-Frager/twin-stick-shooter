@@ -33,7 +33,7 @@ namespace TwinStickShooter.Entities
             }
 
             Position += input.MoveDirection * GameConstants.PlayerSpeed * deltaTime;
-            ClampToScreen();
+            ClampToWorld();
 
             if (input.AimDirection != Vector2.Zero)
             {
@@ -43,11 +43,11 @@ namespace TwinStickShooter.Entities
             ShieldActive = input.ShieldHeld;
         }
 
-        private void ClampToScreen()
+        private void ClampToWorld()
         {
             float r = GameConstants.PlayerRadius;
-            Position.X = MathHelper.Clamp(Position.X, r, GameConstants.ScreenWidth - r);
-            Position.Y = MathHelper.Clamp(Position.Y, r, GameConstants.ScreenHeight - r);
+            Position.X = MathHelper.Clamp(Position.X, r, GameConstants.WorldWidth - r);
+            Position.Y = MathHelper.Clamp(Position.Y, r, GameConstants.WorldHeight - r);
         }
     }
 }

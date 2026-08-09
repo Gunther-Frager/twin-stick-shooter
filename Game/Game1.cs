@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using TwinStickShooter.Core;
@@ -16,6 +17,8 @@ namespace TwinStickShooter
         private ShipRenderer _shipRenderer;
         private BulletRenderer _bulletRenderer;
         private ParticleRenderer _particleRenderer;
+        private ArenaRenderer _arenaRenderer;
+        private Camera _camera;
 
         private readonly Player[] _players = new Player[GameConstants.MaxPlayers];
         private BulletManager _bulletManager;
@@ -52,6 +55,7 @@ namespace TwinStickShooter
             _inputManager = new InputManager();
             _bulletManager = new BulletManager();
             _particleSystem = new ParticleSystem(GameConstants.MaxParticles);
+            _camera = new Camera();
 
             // Spawns iniciales repartidos en el centro de la pantalla (placeholder;
             // en Fase 4 esto vendrá del LevelManager / mapa).
@@ -75,6 +79,7 @@ namespace TwinStickShooter
             _shipRenderer = new ShipRenderer(GraphicsDevice);
             _bulletRenderer = new BulletRenderer(GraphicsDevice);
             _particleRenderer = new ParticleRenderer(GraphicsDevice);
+            _arenaRenderer = new ArenaRenderer(GraphicsDevice);
         }
 
         protected override void Update(GameTime gameTime)
@@ -82,6 +87,17 @@ namespace TwinStickShooter
             float deltaTime = (float)gameTime.ElapsedGameTime.TotalSeconds;
 
             _inputManager.Update();
+
+            // Actualiza la cámara con los jugadores activos
+            var activePlayers = new List<Player>();
+            for (int i = 0; i < GameConstants.MaxPlayers; i++)
+            {
+                if (_inputManager.GetState(i).IsConnected)
+                {
+                    activePlayers.Add(_players[i]);
+                }
+            }
+            _camera.Update(activePlayers.ToArray());
 
             for (int i = 0; i < GameConstants.MaxPlayers; i++)
             {
@@ -173,10 +189,13 @@ namespace TwinStickShooter
         {
             GraphicsDevice.Clear(new Color(8, 8, 16)); // fondo oscuro, estilo neón
 
-            // Orden de dibujo: partículas atrás, naves en medio, balas encima.
-            _particleRenderer.Draw(GraphicsDevice, _particleSystem.Particles);
-            _shipRenderer.Draw(GraphicsDevice, _players);
-            _bulletRenderer.Draw(GraphicsDevice, _bulletManager.Bullets);
+            Matrix viewMatrix = _camera.ViewMatrix;
+
+            // Orden de dibujo: arena atrás, partículas, naves en medio, balas encima.
+            _arenaRenderer.Draw(viewMatrix);
+            _particleRenderer.Draw(GraphicsDevice, _particleSystem.Particles, viewMatrix);
+            _shipRenderer.Draw(GraphicsDevice, _players, viewMatrix);
+            _bulletRenderer.Draw(GraphicsDevice, _bulletManager.Bullets, viewMatrix);
 
             base.Draw(gameTime);
         }
@@ -206,7 +225,8 @@ namespace TwinStickShooter
                 Window.Title =
                     $"Twin-Stick Shooter | FPS: {fps:0} | Mandos: {connected}/{GameConstants.MaxPlayers} " +
                     $"| Balas: {activeBullets}/{GameConstants.MaxBullets} " +
-                    $"| Partículas: {activeParticles}/{GameConstants.MaxParticles}";
+                    $"| Partículas: {activeParticles}/{GameConstants.MaxParticles} " +
+                    $"| Zoom: {_camera.ViewMatrix.M11:0.00}";
 
                 _fpsTimer = 0f;
                 _frameCount = 0;

@@ -31,8 +31,10 @@ namespace TwinStickShooter.Rendering
             _vertices = new VertexPositionColor[GameConstants.MaxParticles * 6];
         }
 
-        public void Draw(GraphicsDevice graphicsDevice, ParticleSystem.Particle[] particles)
+        public void Draw(GraphicsDevice graphicsDevice, ParticleSystem.Particle[] particles, Matrix viewMatrix)
         {
+            _effect.View = viewMatrix;
+
             int vertexCount = 0;
 
             for (int i = 0; i < particles.Length; i++)

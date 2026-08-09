@@ -53,13 +53,13 @@ namespace TwinStickShooter.Entities
                 bullet.Position += bullet.Velocity * deltaTime;
                 bullet.LifeRemaining -= deltaTime;
 
-                bool offScreen =
+                bool offWorld =
                     bullet.Position.X < -GameConstants.BulletRadius ||
-                    bullet.Position.X > GameConstants.ScreenWidth + GameConstants.BulletRadius ||
+                    bullet.Position.X > GameConstants.WorldWidth + GameConstants.BulletRadius ||
                     bullet.Position.Y < -GameConstants.BulletRadius ||
-                    bullet.Position.Y > GameConstants.ScreenHeight + GameConstants.BulletRadius;
+                    bullet.Position.Y > GameConstants.WorldHeight + GameConstants.BulletRadius;
 
-                if (bullet.LifeRemaining <= 0f || offScreen)
+                if (bullet.LifeRemaining <= 0f || offWorld)
                 {
                     bullet.Active = false;
                     _pool.Release(bullet.PoolIndex);

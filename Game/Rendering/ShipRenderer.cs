@@ -46,8 +46,10 @@ namespace TwinStickShooter.Rendering
             _shieldVertices = new VertexPositionColor[GameConstants.MaxPlayers * ShieldSegments * 2];
         }
 
-        public void Draw(GraphicsDevice graphicsDevice, Player[] players)
+        public void Draw(GraphicsDevice graphicsDevice, Player[] players, Matrix viewMatrix)
         {
+            _effect.View = viewMatrix;
+
             int shipVertexCount = 0;
             int shieldVertexCount = 0;
 

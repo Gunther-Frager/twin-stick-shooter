@@ -31,8 +31,10 @@ namespace TwinStickShooter.Rendering
             _vertices = new VertexPositionColor[GameConstants.MaxBullets * 6];
         }
 
-        public void Draw(GraphicsDevice graphicsDevice, Bullet[] bullets)
+        public void Draw(GraphicsDevice graphicsDevice, Bullet[] bullets, Matrix viewMatrix)
         {
+            _effect.View = viewMatrix;
+
             int vertexCount = 0;
             float r = GameConstants.BulletRadius;
 
