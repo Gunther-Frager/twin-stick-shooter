@@ -1,0 +1,22 @@
+# Visual Studio / MonoGame / .NET
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Build outputs
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+
+# MonoGame Pipeline Tool
+/MGCB/
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Agent files
+.agent/
