@@ -1,1 +1,0 @@
-public static class GameConstants { public const int WorldWidth = 2000; public const int WorldHeight = 2000; public const float CameraZoomMin = 0.5f; public const float CameraZoomMax = 2.0f; }
