@@ -95,6 +95,7 @@ namespace TwinStickShooter
             _bulletRenderer = new BulletRenderer(GraphicsDevice);
             _particleRenderer = new ParticleRenderer(GraphicsDevice);
             _arenaRenderer = new ArenaRenderer(GraphicsDevice, _levelManager);
+            _arenaRenderer.RebuildGeometry(); // Reconstruir geometría con el mapa cargado
             _debugConsole.LoadContent(GraphicsDevice);
         }
 

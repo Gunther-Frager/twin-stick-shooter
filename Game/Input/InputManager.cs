@@ -32,6 +32,42 @@ namespace TwinStickShooter.Input
                 ref PlayerInputState state = ref _current[i];
                 state.IsConnected = pad.IsConnected;
 
+                // Fallback: Si es el jugador 0 y no hay gamepad conectado, habilitar teclado
+                if (i == 0 && !pad.IsConnected)
+                {
+                    state.IsConnected = true;
+                    var kbd = Microsoft.Xna.Framework.Input.Keyboard.GetState();
+                    var mouse = Microsoft.Xna.Framework.Input.Mouse.GetState();
+
+                    Vector2 moveDir = Vector2.Zero;
+                    if (kbd.IsKeyDown(Keys.W) || kbd.IsKeyDown(Keys.Up)) moveDir.Y -= 1f;
+                    if (kbd.IsKeyDown(Keys.S) || kbd.IsKeyDown(Keys.Down)) moveDir.Y += 1f;
+                    if (kbd.IsKeyDown(Keys.A) || kbd.IsKeyDown(Keys.Left)) moveDir.X -= 1f;
+                    if (kbd.IsKeyDown(Keys.D) || kbd.IsKeyDown(Keys.Right)) moveDir.X += 1f;
+
+                    if (moveDir != Vector2.Zero) moveDir.Normalize();
+                    state.MoveDirection = moveDir;
+
+                    // Apuntado con mouse respecto al centro de la pantalla o posición del jugador
+                    // Por simplicidad, apuntado con flechas o mouse si se desea. Aquí usaremos flechas o mouse.
+                    Vector2 aimDir = new Vector2(1f, 0f); // default
+                    if (kbd.IsKeyDown(Keys.NumPad8) || kbd.IsKeyDown(Keys.I)) aimDir = new Vector2(0f, -1f);
+                    else if (kbd.IsKeyDown(Keys.NumPad2) || kbd.IsKeyDown(Keys.K)) aimDir = new Vector2(0f, 1f);
+                    else if (kbd.IsKeyDown(Keys.NumPad4) || kbd.IsKeyDown(Keys.J)) aimDir = new Vector2(-1f, 0f);
+                    else if (kbd.IsKeyDown(Keys.NumPad6) || kbd.IsKeyDown(Keys.L)) aimDir = new Vector2(1f, 0f);
+                    
+                    if (aimDir != Vector2.Zero) state.AimDirection = aimDir;
+
+                    state.IsShooting = kbd.IsKeyDown(Keys.Space) || mouse.LeftButton == ButtonState.Pressed;
+                    
+                    bool shieldHeldKbd = kbd.IsKeyDown(Keys.LeftShift) || kbd.IsKeyDown(Keys.RightShift);
+                    state.ShieldPressedThisFrame = shieldHeldKbd && !_shieldHeldPrevious[i];
+                    state.ShieldHeld = shieldHeldKbd;
+                    _shieldHeldPrevious[i] = shieldHeldKbd;
+
+                    continue;
+                }
+
                 if (!pad.IsConnected)
                 {
                     state.MoveDirection = Vector2.Zero;
