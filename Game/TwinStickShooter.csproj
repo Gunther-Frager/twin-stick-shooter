@@ -22,4 +22,10 @@
          Fase 1 no depende de assets, todo es geometría generada por código. -->
   </ItemGroup>
 
+  <ItemGroup>
+    <None Update="Content\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>

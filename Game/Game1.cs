@@ -19,10 +19,12 @@ namespace TwinStickShooter
         private ParticleRenderer _particleRenderer;
         private ArenaRenderer _arenaRenderer;
         private Camera _camera;
+        private DebugConsole _debugConsole;
 
         private readonly Player[] _players = new Player[GameConstants.MaxPlayers];
         private BulletManager _bulletManager;
         private ParticleSystem _particleSystem;
+        private LevelManager _levelManager;
 
         // Timers por jugador. Arrays fijos (MaxPlayers): cero allocations en Update().
         private readonly float[] _shootCooldown = new float[GameConstants.MaxPlayers];
@@ -56,6 +58,19 @@ namespace TwinStickShooter
             _bulletManager = new BulletManager();
             _particleSystem = new ParticleSystem(GameConstants.MaxParticles);
             _camera = new Camera();
+            _levelManager = new LevelManager(GameConstants.GridWidth, GameConstants.GridHeight, GameConstants.GridCellSize);
+            _debugConsole = new DebugConsole();
+
+            // Cargar el mapa de prueba ANTES de crear el renderer
+            try
+            {
+                MapLoader.LoadMap(_levelManager, Content, "Maps/test_map");
+                // Nota: _arenaRenderer aún no se ha creado aquí (se crea en LoadContent)
+            }
+            catch (System.Exception e)
+            {
+                Console.WriteLine("Error: " + e.Message);
+            }
 
             // Spawns iniciales repartidos en el centro de la pantalla (placeholder;
             // en Fase 4 esto vendrá del LevelManager / mapa).
@@ -79,7 +94,8 @@ namespace TwinStickShooter
             _shipRenderer = new ShipRenderer(GraphicsDevice);
             _bulletRenderer = new BulletRenderer(GraphicsDevice);
             _particleRenderer = new ParticleRenderer(GraphicsDevice);
-            _arenaRenderer = new ArenaRenderer(GraphicsDevice);
+            _arenaRenderer = new ArenaRenderer(GraphicsDevice, _levelManager);
+            _debugConsole.LoadContent(GraphicsDevice);
         }
 
         protected override void Update(GameTime gameTime)
@@ -104,7 +120,7 @@ namespace TwinStickShooter
                 PlayerInputState input = _inputManager.GetState(i);
                 Player player = _players[i];
 
-                player.Update(in input, deltaTime);
+                player.Update(in input, deltaTime, _levelManager);
 
                 if (!input.IsConnected)
                 {
@@ -197,6 +213,9 @@ namespace TwinStickShooter
             _shipRenderer.Draw(GraphicsDevice, _players, viewMatrix);
             _bulletRenderer.Draw(GraphicsDevice, _bulletManager.Bullets, viewMatrix);
 
+            // Dibujar la consola de depuración
+            _debugConsole.Draw(gameTime);
+
             base.Draw(gameTime);
         }
 
@@ -205,6 +224,16 @@ namespace TwinStickShooter
         /// balas/partículas activas (útil para verificar que el pooling
         /// no está creciendo sin límite). Evita depender de SpriteFont.
         /// </summary>
+        private string _debugMessage = "";
+
+        /// <summary>
+        /// Muestra un mensaje en la consola de depuración.
+        /// </summary>
+        public void SetDebugMessage(string message)
+        {
+            _debugConsole.AddMessage(message);
+        }
+
         private void UpdateDebugTitle(GameTime gameTime)
         {
             _frameCount++;
@@ -226,7 +255,7 @@ namespace TwinStickShooter
                     $"Twin-Stick Shooter | FPS: {fps:0} | Mandos: {connected}/{GameConstants.MaxPlayers} " +
                     $"| Balas: {activeBullets}/{GameConstants.MaxBullets} " +
                     $"| Partículas: {activeParticles}/{GameConstants.MaxParticles} " +
-                    $"| Zoom: {_camera.ViewMatrix.M11:0.00}";
+                    $"| Zoom: {_camera.ViewMatrix.M11:0.00} | {_debugMessage}";
 
                 _fpsTimer = 0f;
                 _frameCount = 0;
@@ -251,6 +280,26 @@ namespace TwinStickShooter
                 if (particles[i].Active) count++;
             }
             return count;
+        }
+
+        /// <summary>
+        /// Cuenta cuántas celdas del LevelManager están marcadas como paredes.
+        /// </summary>
+        private int CountWalls()
+        {
+            int wallCount = 0;
+            for (int x = 0; x < GameConstants.GridWidth; x++)
+            {
+                for (int y = 0; y < GameConstants.GridHeight; y++)
+                {
+                    Vector2 testPosition = new Vector2(x * GameConstants.GridCellSize + 1, y * GameConstants.GridCellSize + 1);
+                    if (_levelManager.CheckCollision(testPosition, 1f))
+                    {
+                        wallCount++;
+                    }
+                }
+            }
+            return wallCount;
         }
     }
 }

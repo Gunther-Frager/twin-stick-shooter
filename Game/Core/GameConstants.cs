@@ -57,5 +57,10 @@ namespace TwinStickShooter.Core
         public const float CameraZoomMax = 1.0f;    // Máximo acercamiento (1:1)
         public const float CameraLerpFactor = 0.12f; // Suavizado de movimiento/zoom
         public const float CameraPadding = 100f;    // Margen extra para que los jugadores no queden pegados al borde
+
+        // --- Grilla de Colisiones (Fase 4: laberinto y colisiones) ---
+        public const int GridWidth = 30;            // Coincide con el JSON
+        public const int GridHeight = 30;           // Coincide con el JSON
+        public const int GridCellSize = WorldWidth / GridWidth;  // 2400/30 = 80 píxeles por celda
     }
 }
