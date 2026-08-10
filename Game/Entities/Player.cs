@@ -16,6 +16,7 @@ namespace TwinStickShooter.Entities
         public Vector2 Position;
         public float FacingAngle; // radianes, 0 = mirando a la derecha (+X)
         public bool ShieldActive;
+        public bool IsActive;
 
         public Player(int index, Vector2 spawnPosition)
         {

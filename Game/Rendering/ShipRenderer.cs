@@ -56,6 +56,7 @@ namespace TwinStickShooter.Rendering
             for (int p = 0; p < players.Length; p++)
             {
                 Player player = players[p];
+                if (!player.IsActive) continue;
 
                 float cos = (float)Math.Cos(player.FacingAngle);
                 float sin = (float)Math.Sin(player.FacingAngle);

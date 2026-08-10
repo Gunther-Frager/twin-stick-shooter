@@ -54,6 +54,11 @@ namespace TwinStickShooter.Core
             }
         }
 
+        public static void GenerateProceduralMap(LevelManager levelManager)
+        {
+            levelManager.GenerateProceduralMap();
+        }
+
         private class MapData
         {
             public int width { get; set; }

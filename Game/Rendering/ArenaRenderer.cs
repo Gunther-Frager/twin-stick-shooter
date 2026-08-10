@@ -99,6 +99,36 @@ namespace TwinStickShooter.Rendering
                     }
                 }
             }
+
+            // 4. Punto de inicio y salida
+            Point startPoint = FindStartPoint();
+            Point endPoint = FindEndPoint();
+
+            // Dibujar punto de inicio (verde)
+            float startX = startPoint.X * GameConstants.GridCellSize;
+            float startY = startPoint.Y * GameConstants.GridCellSize;
+            Color startColor = new Color(0, 255, 0);
+            vertices.Add(new VertexPositionColor(new Vector3(startX, startY, 0), startColor));
+            vertices.Add(new VertexPositionColor(new Vector3(startX + GameConstants.GridCellSize, startY, 0), startColor));
+            vertices.Add(new VertexPositionColor(new Vector3(startX + GameConstants.GridCellSize, startY, 0), startColor));
+            vertices.Add(new VertexPositionColor(new Vector3(startX + GameConstants.GridCellSize, startY + GameConstants.GridCellSize, 0), startColor));
+            vertices.Add(new VertexPositionColor(new Vector3(startX + GameConstants.GridCellSize, startY + GameConstants.GridCellSize, 0), startColor));
+            vertices.Add(new VertexPositionColor(new Vector3(startX, startY + GameConstants.GridCellSize, 0), startColor));
+            vertices.Add(new VertexPositionColor(new Vector3(startX, startY + GameConstants.GridCellSize, 0), startColor));
+            vertices.Add(new VertexPositionColor(new Vector3(startX, startY, 0), startColor));
+
+            // Dibujar punto de salida (rojo)
+            float endX = endPoint.X * GameConstants.GridCellSize;
+            float endY = endPoint.Y * GameConstants.GridCellSize;
+            Color endColor = new Color(255, 0, 0);
+            vertices.Add(new VertexPositionColor(new Vector3(endX, endY, 0), endColor));
+            vertices.Add(new VertexPositionColor(new Vector3(endX + GameConstants.GridCellSize, endY, 0), endColor));
+            vertices.Add(new VertexPositionColor(new Vector3(endX + GameConstants.GridCellSize, endY, 0), endColor));
+            vertices.Add(new VertexPositionColor(new Vector3(endX + GameConstants.GridCellSize, endY + GameConstants.GridCellSize, 0), endColor));
+            vertices.Add(new VertexPositionColor(new Vector3(endX + GameConstants.GridCellSize, endY + GameConstants.GridCellSize, 0), endColor));
+            vertices.Add(new VertexPositionColor(new Vector3(endX, endY + GameConstants.GridCellSize, 0), endColor));
+            vertices.Add(new VertexPositionColor(new Vector3(endX, endY + GameConstants.GridCellSize, 0), endColor));
+            vertices.Add(new VertexPositionColor(new Vector3(endX, endY, 0), endColor));
             
             System.Diagnostics.Debug.WriteLine("[ArenaRenderer] Paredes detectadas: " + wallCount);
 
@@ -109,6 +139,38 @@ namespace TwinStickShooter.Rendering
         public void RebuildGeometry()
         {
             BuildArenaGeometry();
+        }
+
+        private Point FindStartPoint()
+        {
+            // Buscar una celda vacía cerca del borde izquierdo
+            for (int x = 1; x < GameConstants.GridWidth - 1; x++)
+            {
+                for (int y = 1; y < GameConstants.GridHeight - 1; y++)
+                {
+                    if (!_levelManager.CheckCollision(new Vector2(x * GameConstants.GridCellSize + 1, y * GameConstants.GridCellSize + 1), 1f))
+                    {
+                        return new Point(x, y);
+                    }
+                }
+            }
+            return new Point(1, 1);
+        }
+
+        private Point FindEndPoint()
+        {
+            // Buscar una celda vacía cerca del borde derecho
+            for (int x = GameConstants.GridWidth - 2; x > 0; x--)
+            {
+                for (int y = GameConstants.GridHeight - 2; y > 0; y--)
+                {
+                    if (!_levelManager.CheckCollision(new Vector2(x * GameConstants.GridCellSize + 1, y * GameConstants.GridCellSize + 1), 1f))
+                    {
+                        return new Point(x, y);
+                    }
+                }
+            }
+            return new Point(GameConstants.GridWidth - 2, GameConstants.GridHeight - 2);
         }
 
         public void Draw(Matrix viewMatrix)
