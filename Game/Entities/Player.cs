@@ -25,14 +25,23 @@ namespace TwinStickShooter.Entities
             FacingAngle = 0f;
         }
 
-        public void Update(in PlayerInputState input, float deltaTime)
+        public void Update(in PlayerInputState input, float deltaTime, LevelManager levelManager = null)
         {
             if (!input.IsConnected)
             {
                 return;
             }
 
-            Position += input.MoveDirection * GameConstants.PlayerSpeed * deltaTime;
+            Vector2 newPosition = Position + input.MoveDirection * GameConstants.PlayerSpeed * deltaTime;
+            
+            // Verificar colisiones con la grilla
+            if (levelManager != null && levelManager.CheckCollision(newPosition, GameConstants.PlayerRadius))
+            {
+                // Si hay colisión, no actualizar la posición
+                newPosition = Position;
+            }
+            
+            Position = newPosition;
             ClampToWorld();
 
             if (input.AimDirection != Vector2.Zero)
