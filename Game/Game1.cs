@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
+using Microsoft.Xna.Framework.Input;
 using TwinStickShooter.Core;
 using TwinStickShooter.Entities;
 using TwinStickShooter.Input;
@@ -25,6 +26,9 @@ namespace TwinStickShooter
         private BulletManager _bulletManager;
         private ParticleSystem _particleSystem;
         private LevelManager _levelManager;
+
+        // Estado del juego
+        private GameState _currentGameState = GameState.SinglePlayer;
 
         // Timers por jugador. Arrays fijos (MaxPlayers): cero allocations en Update().
         private readonly float[] _shootCooldown = new float[GameConstants.MaxPlayers];
@@ -72,6 +76,9 @@ namespace TwinStickShooter
                 Console.WriteLine("Error: " + e.Message);
             }
 
+            // Generar un mapa procedural si se desea
+            // MapLoader.GenerateProceduralMap(_levelManager);
+
             // Spawns iniciales repartidos en el centro de la pantalla (placeholder;
             // en Fase 4 esto vendrá del LevelManager / mapa).
             Vector2 center = new Vector2(GameConstants.ScreenWidth / 2f, GameConstants.ScreenHeight / 2f);
@@ -84,7 +91,12 @@ namespace TwinStickShooter
             for (int i = 0; i < GameConstants.MaxPlayers; i++)
             {
                 _players[i] = new Player(i, center + offsets[i]);
+                _players[i].IsActive = (i == 0); // Solo el jugador 0 está activo por defecto
             }
+
+            // Contar paredes para depuración
+            int wallCount = CountWalls();
+            Console.WriteLine($"[Game1] Paredes en el mapa: {wallCount}");
 
             base.Initialize();
         }
@@ -105,6 +117,17 @@ namespace TwinStickShooter
 
             _inputManager.Update();
 
+            // Manejo de teclas para cambiar entre modos de juego
+            var keyboardState = Keyboard.GetState();
+            if (keyboardState.IsKeyDown(Keys.F1))
+            {
+                SetGameMode(GameState.SinglePlayer);
+            }
+            else if (keyboardState.IsKeyDown(Keys.F2))
+            {
+                SetGameMode(GameState.Multiplayer);
+            }
+
             // Actualiza la cámara con los jugadores activos
             var activePlayers = new List<Player>();
             for (int i = 0; i < GameConstants.MaxPlayers; i++)
@@ -120,6 +143,11 @@ namespace TwinStickShooter
             {
                 PlayerInputState input = _inputManager.GetState(i);
                 Player player = _players[i];
+
+                if (!player.IsActive)
+                {
+                    continue;
+                }
 
                 player.Update(in input, deltaTime, _levelManager);
 
@@ -253,7 +281,7 @@ namespace TwinStickShooter
 
                 float fps = _frameCount / _fpsTimer;
                 Window.Title =
-                    $"Twin-Stick Shooter | FPS: {fps:0} | Mandos: {connected}/{GameConstants.MaxPlayers} " +
+                    $"Twin-Stick Shooter | FPS: {fps:0} | Modo: {_currentGameState} | Mandos: {connected}/{GameConstants.MaxPlayers} " +
                     $"| Balas: {activeBullets}/{GameConstants.MaxBullets} " +
                     $"| Partículas: {activeParticles}/{GameConstants.MaxParticles} " +
                     $"| Zoom: {_camera.ViewMatrix.M11:0.00} | {_debugMessage}";
@@ -301,6 +329,40 @@ namespace TwinStickShooter
                 }
             }
             return wallCount;
+        }
+
+        /// <summary>
+        /// Genera un mapa procedural y actualiza la geometría del renderizador.
+        /// </summary>
+        public void GenerateProceduralMap()
+        {
+            MapLoader.GenerateProceduralMap(_levelManager);
+            _arenaRenderer.RebuildGeometry();
+            int wallCount = CountWalls();
+            Console.WriteLine($"[Game1] Paredes en el mapa generado: {wallCount}");
+        }
+
+        /// <summary>
+        /// Cambia el modo de juego y actualiza el estado de los jugadores.
+        /// </summary>
+        public void SetGameMode(GameState mode)
+        {
+            _currentGameState = mode;
+            
+            // Actualizar el estado de los jugadores según el modo
+            for (int i = 0; i < GameConstants.MaxPlayers; i++)
+            {
+                if (mode == GameState.SinglePlayer)
+                {
+                    // Solo el jugador 0 está activo en modo un jugador
+                    _players[i].IsActive = (i == 0);
+                }
+                else if (mode == GameState.Multiplayer)
+                {
+                    // Todos los jugadores están activos en modo multijugador
+                    _players[i].IsActive = true;
+                }
+            }
         }
     }
 }

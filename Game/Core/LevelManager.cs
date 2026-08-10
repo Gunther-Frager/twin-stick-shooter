@@ -13,6 +13,7 @@ namespace TwinStickShooter.Core
         private readonly int _gridHeight;
         private readonly int _cellSize;
         private readonly bool[,] _collisionGrid;
+        private MapGenerator _mapGenerator;
 
         public LevelManager(int gridWidth, int gridHeight, int cellSize)
         {
@@ -20,6 +21,7 @@ namespace TwinStickShooter.Core
             _gridHeight = gridHeight;
             _cellSize = cellSize;
             _collisionGrid = new bool[gridWidth, gridHeight];
+            _mapGenerator = new MapGenerator(gridWidth, gridHeight, cellSize);
         }
 
         /// <summary>
@@ -77,6 +79,21 @@ namespace TwinStickShooter.Core
                 gridPosition.X * _cellSize + _cellSize / 2f,
                 gridPosition.Y * _cellSize + _cellSize / 2f
             );
+        }
+
+        /// <summary>
+        /// Genera un mapa procedural y lo carga en el LevelManager.
+        /// </summary>
+        public void GenerateProceduralMap()
+        {
+            int[,] generatedGrid = _mapGenerator.GenerateMap();
+            for (int x = 0; x < _gridWidth; x++)
+            {
+                for (int y = 0; y < _gridHeight; y++)
+                {
+                    _collisionGrid[x, y] = generatedGrid[x, y] == 1;
+                }
+            }
         }
     }
 }
