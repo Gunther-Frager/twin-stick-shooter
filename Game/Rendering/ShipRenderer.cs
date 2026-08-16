@@ -7,8 +7,8 @@ using TwinStickShooter.Entities;
 namespace TwinStickShooter.Rendering
 {
     /// <summary>
-    /// Dibuja cada Player como un triángulo vectorial orientado (sin texturas,
-    /// sin Content Pipeline) usando DrawUserPrimitives + BasicEffect.
+    /// Dibuja cada Player como un círculo con una hendidura semicircular en el frente
+    /// (sin texturas, sin Content Pipeline) usando DrawUserPrimitives + BasicEffect.
     ///
     /// Todos los buffers se alocan UNA vez en el constructor y se reescriben
     /// cada frame in-place: cero allocations por Draw().
@@ -21,6 +21,7 @@ namespace TwinStickShooter.Rendering
         private readonly BasicEffect _effect;
         private readonly VertexPositionColor[] _shipVertices;
         private readonly VertexPositionColor[] _shieldVertices;
+        private readonly Vector2[] _localShipPoints;
 
         public ShipRenderer(GraphicsDevice graphicsDevice)
         {
@@ -35,9 +36,41 @@ namespace TwinStickShooter.Rendering
                     0f, 1f)
             };
 
-            // Círculo (ShipSegments * 3) + Marca de dirección (3)
-            _shipVertices = new VertexPositionColor[GameConstants.MaxPlayers * (ShipSegments * 3 + 3)];
+            _shipVertices = new VertexPositionColor[GameConstants.MaxPlayers * ShipSegments * 3];
             _shieldVertices = new VertexPositionColor[GameConstants.MaxPlayers * ShieldSegments * 2];
+
+            // Precalcular los puntos locales de la nave con la hendidura semicircular en el frente
+            _localShipPoints = new Vector2[ShipSegments];
+            float theta = MathHelper.ToRadians(40f);
+            float radius = GameConstants.PlayerRadius;
+
+            // 1. Parte circular exterior (24 segmentos, de theta a 2pi - theta)
+            int outerSegments = 24;
+            float startAngle = theta;
+            float endAngle = MathHelper.TwoPi - theta;
+            for (int i = 0; i <= outerSegments; i++)
+            {
+                float angle = startAngle + (endAngle - startAngle) * i / outerSegments;
+                Vector2 pt = new Vector2((float)Math.Cos(angle), (float)Math.Sin(angle)) * radius;
+                if (i < outerSegments)
+                {
+                    _localShipPoints[i] = pt;
+                }
+            }
+
+            // 2. Hendidura semicircular (8 segmentos, de 3pi/2 a pi/2 en el círculo de la hendidura)
+            int innerSegments = 8;
+            float xc = radius * (float)Math.Cos(theta);
+            float r = radius * (float)Math.Sin(theta);
+            for (int i = 0; i < innerSegments; i++)
+            {
+                float phi = 1.5f * MathHelper.Pi - (MathHelper.Pi * i / innerSegments);
+                Vector2 pt = new Vector2(
+                    xc + r * (float)Math.Cos(phi),
+                    r * (float)Math.Sin(phi)
+                );
+                _localShipPoints[outerSegments + i] = pt;
+            }
         }
 
         public void Draw(GraphicsDevice graphicsDevice, Player[] players, Matrix viewMatrix)
@@ -52,47 +85,34 @@ namespace TwinStickShooter.Rendering
                 Player player = players[p];
                 if (!player.IsActive) continue;
 
-                float radius = GameConstants.PlayerRadius;
                 Color shipColor = player.Color;
 
-                // 1. Dibujar el círculo del cuerpo
-                for (int s = 0; s < ShipSegments; s++)
-                {
-                    float a0 = MathHelper.TwoPi * s / ShipSegments;
-                    float a1 = MathHelper.TwoPi * (s + 1) / ShipSegments;
-
-                    Vector2 p0 = new Vector2((float)Math.Cos(a0), (float)Math.Sin(a0)) * radius;
-                    Vector2 p1 = new Vector2((float)Math.Cos(a1), (float)Math.Sin(a1)) * radius;
-
-                    _shipVertices[shipVertexCount++] = new VertexPositionColor(new Vector3(player.Position, 0f), shipColor);
-                    _shipVertices[shipVertexCount++] = new VertexPositionColor(new Vector3(player.Position + p0, 0f), shipColor);
-                    _shipVertices[shipVertexCount++] = new VertexPositionColor(new Vector3(player.Position + p1, 0f), shipColor);
-                }
-
-                // 2. Dibujar la marca de dirección (un triángulo pequeño que sobresale)
-                // La marca apunta hacia FacingAngle
+                // Dibujar el cuerpo de la nave usando los puntos locales rotados
                 float cos = (float)Math.Cos(player.FacingAngle);
                 float sin = (float)Math.Sin(player.FacingAngle);
-                
-                // Definimos la marca localmente (apuntando a +X) y la rotamos
-                Vector2 mTip = new Vector2(radius * 1.3f, 0f);
-                Vector2 mSide1 = new Vector2(radius * 0.8f, radius * 0.4f);
-                Vector2 mSide2 = new Vector2(radius * 0.8f, -radius * 0.4f);
 
-                Vector2[] markPoints = { mTip, mSide1, mSide2 };
-                foreach (var pt in markPoints)
+                for (int s = 0; s < ShipSegments; s++)
                 {
-                    Vector2 rotated = new Vector2(
-                        pt.X * cos - pt.Y * sin,
-                        pt.X * sin + pt.Y * cos);
-                    
-                    _shipVertices[shipVertexCount++] = new VertexPositionColor(
-                        new Vector3(player.Position + rotated, 0f), 
-                        Color.White); // Marca blanca para que resalte
+                    Vector2 p0 = _localShipPoints[s];
+                    Vector2 p1 = _localShipPoints[(s + 1) % ShipSegments];
+
+                    Vector2 r0 = new Vector2(
+                        p0.X * cos - p0.Y * sin,
+                        p0.X * sin + p0.Y * cos
+                    );
+                    Vector2 r1 = new Vector2(
+                        p1.X * cos - p1.Y * sin,
+                        p1.X * sin + p1.Y * cos
+                    );
+
+                    _shipVertices[shipVertexCount++] = new VertexPositionColor(new Vector3(player.Position, 0f), shipColor);
+                    _shipVertices[shipVertexCount++] = new VertexPositionColor(new Vector3(player.Position + r0, 0f), shipColor);
+                    _shipVertices[shipVertexCount++] = new VertexPositionColor(new Vector3(player.Position + r1, 0f), shipColor);
                 }
 
                 if (player.ShieldActive)
                 {
+                    float radius = GameConstants.PlayerRadius;
                     float shieldRadius = radius * 1.6f;
                     for (int s = 0; s < ShieldSegments; s++)
                     {
