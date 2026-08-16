@@ -14,6 +14,8 @@ namespace TwinStickShooter.Core
         private readonly int _cellSize;
         private readonly bool[,] _collisionGrid;
         private MapGenerator _mapGenerator;
+        private Point _spawnPosition;
+        private Point _exitPosition;
 
         public LevelManager(int gridWidth, int gridHeight, int cellSize)
         {
@@ -79,6 +81,47 @@ namespace TwinStickShooter.Core
                 gridPosition.X * _cellSize + _cellSize / 2f,
                 gridPosition.Y * _cellSize + _cellSize / 2f
             );
+        }
+
+        /// <summary>
+        /// Establece la posición de spawn del jugador.
+        /// </summary>
+        public void SetSpawnPosition(int x, int y)
+        {
+            _spawnPosition = new Point(x, y);
+        }
+
+        /// <summary>
+        /// Establece la posición de salida del nivel.
+        /// </summary>
+        public void SetExitPosition(int x, int y)
+        {
+            _exitPosition = new Point(x, y);
+        }
+
+        /// <summary>
+        /// Obtiene la posición de spawn del jugador en coordenadas del mundo.
+        /// </summary>
+        public Vector2 GetSpawnPosition()
+        {
+            return GridToWorld(_spawnPosition);
+        }
+
+        /// <summary>
+        /// Obtiene la posición de salida del nivel en coordenadas del mundo.
+        /// </summary>
+        public Vector2 GetExitPosition()
+        {
+            return GridToWorld(_exitPosition);
+        }
+
+        /// <summary>
+        /// Verifica si el jugador ha alcanzado el marcador de salida.
+        /// </summary>
+        public bool CheckExitReached(Vector2 playerPosition)
+        {
+            Vector2 exitWorldPosition = GridToWorld(_exitPosition);
+            return Vector2.Distance(playerPosition, exitWorldPosition) < _cellSize;
         }
 
         /// <summary>

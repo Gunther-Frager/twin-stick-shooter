@@ -47,6 +47,16 @@ namespace TwinStickShooter.Core
                         }
                     }
                 }
+
+                // Almacenar los marcadores de spawn y salida en el LevelManager
+                if (mapData.spawn != null)
+                {
+                    levelManager.SetSpawnPosition(mapData.spawn.x, mapData.spawn.y);
+                }
+                if (mapData.exit != null)
+                {
+                    levelManager.SetExitPosition(mapData.exit.x, mapData.exit.y);
+                }
             }
             catch (Exception ex)
             {
@@ -64,6 +74,20 @@ namespace TwinStickShooter.Core
             public int width { get; set; }
             public int height { get; set; }
             public int[] grid { get; set; }
+            public SpawnData spawn { get; set; }
+            public ExitData exit { get; set; }
+        }
+
+        private class SpawnData
+        {
+            public int x { get; set; }
+            public int y { get; set; }
+        }
+
+        private class ExitData
+        {
+            public int x { get; set; }
+            public int y { get; set; }
         }
     }
 }
