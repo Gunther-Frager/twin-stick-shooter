@@ -96,7 +96,7 @@ namespace TwinStickShooter.Input
                 // de apuntado (comportamiento típico de twin-stick shooters).
 
                 bool triggerShoot = pad.Triggers.Right >= GameConstants.TriggerShootThreshold;
-                bool stickShoot = rightRaw.LengthSquared() >=
+                bool stickShoot = GameConstants.AutoShootOnAim && rightRaw.LengthSquared() >=
                     GameConstants.RightStickDeadzone * GameConstants.RightStickDeadzone;
                 state.IsShooting = triggerShoot || stickShoot;
 

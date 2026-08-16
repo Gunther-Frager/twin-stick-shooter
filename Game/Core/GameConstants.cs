@@ -23,6 +23,7 @@ namespace TwinStickShooter.Core
         public const float LeftStickDeadzone = 0.20f;
         public const float RightStickDeadzone = 0.25f;
         public const float TriggerShootThreshold = 0.35f;
+        public const bool AutoShootOnAim = false; // Por defecto off: solo dispara con R2/Espacio/Mouse
 
         // --- Balas (Fase 2: pooling) ---
         public const int MaxBullets = 128;
