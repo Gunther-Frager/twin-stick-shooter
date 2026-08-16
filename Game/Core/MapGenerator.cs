@@ -199,26 +199,48 @@ namespace TwinStickShooter.Core
                     }
                 }
 
-                int roomX = _random.Next(2, _width - roomWidth - 2);
-                int roomY = _random.Next(2, _height - roomHeight - 2);
-
-                Rectangle newRoom = new Rectangle(roomX, roomY, roomWidth, roomHeight);
-
-                for (int x = roomX; x < roomX + roomWidth; x++)
+                // Intentar colocar la habitación sin solapamientos
+                bool placed = false;
+                for (int attempt = 0; attempt < 15; attempt++)
                 {
-                    for (int y = roomY; y < roomY + roomHeight; y++)
+                    int roomX = _random.Next(2, _width - roomWidth - 2);
+                    int roomY = _random.Next(2, _height - roomHeight - 2);
+
+                    Rectangle newRoom = new Rectangle(roomX, roomY, roomWidth, roomHeight);
+
+                    // Verificar intersección con margen de 1 celda para evitar que se toquen o fusionen
+                    Rectangle paddedRoom = new Rectangle(newRoom.X - 1, newRoom.Y - 1, newRoom.Width + 2, newRoom.Height + 2);
+                    bool overlaps = false;
+                    foreach (var room in rooms)
                     {
-                        grid[x, y] = 0;
+                        if (paddedRoom.Intersects(room))
+                        {
+                            overlaps = true;
+                            break;
+                        }
+                    }
+
+                    if (!overlaps)
+                    {
+                        for (int x = roomX; x < roomX + roomWidth; x++)
+                        {
+                            for (int y = roomY; y < roomY + roomHeight; y++)
+                            {
+                                grid[x, y] = 0;
+                            }
+                        }
+
+                        // Agregar islas solo en habitaciones grandes (6x6 o más) y no en la de spawn
+                        if (i > 0 && roomWidth >= 6 && roomHeight >= 6)
+                        {
+                            AddIslandsToRoom(grid, newRoom);
+                        }
+
+                        rooms.Add(newRoom);
+                        placed = true;
+                        break;
                     }
                 }
-
-                // Agregar islas solo en habitaciones grandes (6x6 o más) y no en la de spawn
-                if (i > 0 && roomWidth >= 6 && roomHeight >= 6)
-                {
-                    AddIslandsToRoom(grid, newRoom);
-                }
-
-                rooms.Add(newRoom);
             }
 
             return rooms;
