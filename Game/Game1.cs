@@ -66,17 +66,7 @@ namespace TwinStickShooter
             _debugConsole = new DebugConsole();
 
             // Cargar el mapa de prueba ANTES de crear el renderer
-            try
-            {
-                MapLoader.LoadMap(_levelManager, Content, "Maps/test_map");
-                // Nota: _arenaRenderer aún no se ha creado aquí (se crea en LoadContent)
-            }
-            catch (System.Exception e)
-            {
-                Console.WriteLine("Error: " + e.Message);
-            }
-
-            // Generar un mapa procedural si se desea
+            // Generar un mapa procedural
             MapLoader.GenerateProceduralMap(_levelManager);
 
             // Spawns iniciales en el marcador de spawn del mapa
@@ -237,7 +227,7 @@ namespace TwinStickShooter
 
         protected override void Draw(GameTime gameTime)
         {
-            GraphicsDevice.Clear(new Color(8, 8, 16)); // fondo oscuro, estilo neón
+            GraphicsDevice.Clear(Color.Black); // fondo negro
 
             Matrix viewMatrix = _camera.ViewMatrix;
 
