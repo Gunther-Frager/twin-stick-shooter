@@ -28,12 +28,10 @@ namespace TwinStickShooter.Input
             for (int i = 0; i < GameConstants.MaxPlayers; i++)
             {
                 GamePadState pad = GamePad.GetState((PlayerIndex)i);
-
                 ref PlayerInputState state = ref _current[i];
-                state.IsConnected = pad.IsConnected;
 
-                // Fallback: Si es el jugador 0 y no hay gamepad conectado, habilitar teclado
-                if (i == 0 && !pad.IsConnected)
+                // Jugador 0: Teclado/Mouse siempre disponible (se combina con gamepad si está conectado)
+                if (i == 0)
                 {
                     state.IsConnected = true;
                     var kbd = Microsoft.Xna.Framework.Input.Keyboard.GetState();
@@ -46,27 +44,74 @@ namespace TwinStickShooter.Input
                     if (kbd.IsKeyDown(Keys.D) || kbd.IsKeyDown(Keys.Right)) moveDir.X += 1f;
 
                     if (moveDir != Vector2.Zero) moveDir.Normalize();
+
+                    // Si hay gamepad conectado, el stick izquierdo puede mover al jugador 0 también
+                    if (pad.IsConnected)
+                    {
+                        Vector2 padMove = ApplyRadialDeadzone(pad.ThumbSticks.Left, GameConstants.LeftStickDeadzone);
+                        padMove = new Vector2(padMove.X, -padMove.Y);
+                        if (padMove != Vector2.Zero)
+                        {
+                            moveDir = padMove;
+                        }
+                    }
                     state.MoveDirection = moveDir;
 
-                    // Apuntado con mouse respecto al centro de la pantalla o posición del jugador
-                    // Por simplicidad, apuntado con flechas o mouse si se desea. Aquí usaremos flechas o mouse.
-                    Vector2 aimDir = new Vector2(1f, 0f); // default
-                    if (kbd.IsKeyDown(Keys.NumPad8) || kbd.IsKeyDown(Keys.I)) aimDir = new Vector2(0f, -1f);
-                    else if (kbd.IsKeyDown(Keys.NumPad2) || kbd.IsKeyDown(Keys.K)) aimDir = new Vector2(0f, 1f);
-                    else if (kbd.IsKeyDown(Keys.NumPad4) || kbd.IsKeyDown(Keys.J)) aimDir = new Vector2(-1f, 0f);
-                    else if (kbd.IsKeyDown(Keys.NumPad6) || kbd.IsKeyDown(Keys.L)) aimDir = new Vector2(1f, 0f);
-                    
-                    if (aimDir != Vector2.Zero) state.AimDirection = aimDir;
+                    // Apuntado: Mouse respecto al centro de la pantalla
+                    Vector2 mousePos = new Vector2(mouse.X, mouse.Y);
+                    Vector2 screenCenter = new Vector2(GameConstants.ScreenWidth / 2f, GameConstants.ScreenHeight / 2f);
+                    Vector2 mouseAim = mousePos - screenCenter;
 
-                    state.IsShooting = kbd.IsKeyDown(Keys.Space) || mouse.LeftButton == ButtonState.Pressed;
+                    if (mouseAim != Vector2.Zero)
+                    {
+                        state.AimDirection = Vector2.Normalize(mouseAim);
+                    }
+
+                    // Teclado (IJKL) tiene prioridad sobre el mouse si se presiona
+                    if (kbd.IsKeyDown(Keys.I) || kbd.IsKeyDown(Keys.NumPad8)) state.AimDirection = new Vector2(0, -1);
+                    else if (kbd.IsKeyDown(Keys.K) || kbd.IsKeyDown(Keys.NumPad2)) state.AimDirection = new Vector2(0, 1);
+                    else if (kbd.IsKeyDown(Keys.J) || kbd.IsKeyDown(Keys.NumPad4)) state.AimDirection = new Vector2(-1, 0);
+                    else if (kbd.IsKeyDown(Keys.L) || kbd.IsKeyDown(Keys.NumPad6)) state.AimDirection = new Vector2(1, 0);
+
+                    // Gamepad (stick derecho) tiene prioridad sobre teclado/mouse si se mueve
+                    if (pad.IsConnected)
+                    {
+                        Vector2 padAim = ApplyRadialDeadzone(pad.ThumbSticks.Right, GameConstants.RightStickDeadzone);
+                        padAim = new Vector2(padAim.X, -padAim.Y);
+                        if (padAim != Vector2.Zero)
+                        {
+                            state.AimDirection = padAim;
+                        }
+                    }
+
+                    // Garantizar dirección válida por defecto si es Zero
+                    if (state.AimDirection == Vector2.Zero)
+                    {
+                        state.AimDirection = new Vector2(1, 0);
+                    }
+
+                    // Disparo: Espacio, Click Izquierdo, o Gatillo Derecho / AutoShoot del Gamepad
+                    bool triggerShootPad = pad.IsConnected && (pad.Triggers.Right >= GameConstants.TriggerShootThreshold);
+                    bool stickShootPad = pad.IsConnected && GameConstants.AutoShootOnAim && 
+                                      (pad.ThumbSticks.Right.LengthSquared() >= GameConstants.RightStickDeadzone * GameConstants.RightStickDeadzone);
                     
-                    bool shieldHeldKbd = kbd.IsKeyDown(Keys.LeftShift) || kbd.IsKeyDown(Keys.RightShift);
+                    state.IsShooting = kbd.IsKeyDown(Keys.Space) || 
+                                       mouse.LeftButton == ButtonState.Pressed || 
+                                       triggerShootPad || 
+                                       stickShootPad;
+                    
+                    // Escudo: Shift, o Botón A del Gamepad
+                    bool shieldHeldKbd = kbd.IsKeyDown(Keys.LeftShift) || kbd.IsKeyDown(Keys.RightShift) || 
+                                         (pad.IsConnected && pad.Buttons.A == ButtonState.Pressed);
+                    
                     state.ShieldPressedThisFrame = shieldHeldKbd && !_shieldHeldPrevious[i];
                     state.ShieldHeld = shieldHeldKbd;
                     _shieldHeldPrevious[i] = shieldHeldKbd;
 
                     continue;
                 }
+
+                state.IsConnected = pad.IsConnected;
 
                 if (!pad.IsConnected)
                 {
