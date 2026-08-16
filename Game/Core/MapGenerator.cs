@@ -105,18 +105,59 @@ namespace TwinStickShooter.Core
             // 3. Conectar vía MST (Kruskal) + loops opcionales
             GenerateCorridors(grid, roomCenters);
 
-            // 4. Spawn en sala inicial, Exit en la sala más lejana
-            if (roomCenters.Count > 0)
+            // 4. Spawn en sala inicial (muy pequeña), Exit en la sala más lejana
+            if (rooms.Count > 0)
             {
-                SpawnPoint = roomCenters[0];
-                ExitPoint = roomCenters
-                    .OrderByDescending(c => Vector2.Distance(new Vector2(c.X, c.Y), new Vector2(SpawnPoint.X, SpawnPoint.Y)))
-                    .First();
+                // Obtener la habitación del spawn (siempre la primera, pequeña)
+                Rectangle spawnRoom = rooms[0];
+                Console.WriteLine($"[MapGenerator] Habitación de spawn: {spawnRoom.Width}x{spawnRoom.Height} en ({spawnRoom.X}, {spawnRoom.Y})");
+                
+                // Validar que la habitación de spawn sea pequeña (2x2 a 3x3)
+                if (spawnRoom.Width > 3 || spawnRoom.Height > 3)
+                {
+                    Console.WriteLine("[MapGenerator] WARNING: La habitación de spawn es demasiado grande. Regenerando mapa.");
+                    return GenerateMap();
+                }
+                
+                // Asegurar que el spawn esté DENTRO de la habitación pequeña
+                SpawnPoint = new Point(
+                    spawnRoom.X + spawnRoom.Width / 2,
+                    spawnRoom.Y + spawnRoom.Height / 2
+                );
+                
+                if (roomCenters.Count > 1)
+                {
+                    // Filtrar centros que estén en habitaciones distintas y a una distancia mínima
+                    var distantCenters = roomCenters
+                        .Where((c, index) => index > 0 && // Excluir la habitación del spawn
+                               !IsPointInRoom(c, spawnRoom) && // Asegurar que no esté en la misma habitación
+                               Vector2.Distance(new Vector2(c.X, c.Y), new Vector2(SpawnPoint.X, SpawnPoint.Y)) > 15) // Distancia mínima
+                        .OrderByDescending(c => Vector2.Distance(new Vector2(c.X, c.Y), new Vector2(SpawnPoint.X, SpawnPoint.Y)))
+                        .ToList();
+                    
+                    if (distantCenters.Count > 0)
+                    {
+                        ExitPoint = distantCenters[0];
+                    }
+                    else
+                    {
+                        // Si no hay habitaciones suficientemente lejanas, elegir la más lejana disponible
+                        ExitPoint = roomCenters
+                            .Where((c, index) => index > 0 && !IsPointInRoom(c, spawnRoom))
+                            .OrderByDescending(c => Vector2.Distance(new Vector2(c.X, c.Y), new Vector2(SpawnPoint.X, SpawnPoint.Y)))
+                            .FirstOrDefault(new Point(_width - 2, _height - 2));
+                    }
+                }
+                else
+                {
+                    ExitPoint = new Point(_width - 2, _height - 2); // Fallback extremo
+                }
             }
             else
             {
                 SpawnPoint = new Point(1, 1);
                 ExitPoint = new Point(_width - 2, _height - 2);
+                Console.WriteLine("[MapGenerator] WARNING: No se generaron habitaciones. Usando fallback.");
             }
 
             // 5. Verificar transitabilidad con BFS
@@ -132,12 +173,32 @@ namespace TwinStickShooter.Core
         private List<Rectangle> GenerateRooms(int[,] grid)
         {
             List<Rectangle> rooms = new List<Rectangle>();
-            int roomCount = _random.Next(4, 7);
+            int roomCount = _random.Next(8, 12); // Más habitaciones para mayor complejidad
 
             for (int i = 0; i < roomCount; i++)
             {
-                int roomWidth = _random.Next(4, 8);
-                int roomHeight = _random.Next(4, 8);
+                int roomWidth, roomHeight;
+                
+                if (i == 0) // La habitación de spawn siempre es muy pequeña (2x2 a 3x3)
+                {
+                    roomWidth = _random.Next(2, 4); // 2 o 3
+                    roomHeight = _random.Next(2, 4); // 2 o 3
+                }
+                else
+                {
+                    // Habitaciones más grandes para el resto del mapa
+                    if (_random.NextDouble() < 0.2) // 20% de probabilidad de habitación mediana
+                    {
+                        roomWidth = _random.Next(6, 10); // 6x6 a 9x9
+                        roomHeight = _random.Next(6, 10);
+                    }
+                    else
+                    {
+                        roomWidth = _random.Next(4, 7); // 4x4 a 6x6
+                        roomHeight = _random.Next(4, 7);
+                    }
+                }
+
                 int roomX = _random.Next(2, _width - roomWidth - 2);
                 int roomY = _random.Next(2, _height - roomHeight - 2);
 
@@ -151,10 +212,44 @@ namespace TwinStickShooter.Core
                     }
                 }
 
+                // Agregar islas solo en habitaciones grandes (6x6 o más) y no en la de spawn
+                if (i > 0 && roomWidth >= 6 && roomHeight >= 6)
+                {
+                    AddIslandsToRoom(grid, newRoom);
+                }
+
                 rooms.Add(newRoom);
             }
 
             return rooms;
+        }
+
+        private void AddIslandsToRoom(int[,] grid, Rectangle room)
+        {
+            int islandCount = _random.Next(1, 3);
+            for (int i = 0; i < islandCount; i++)
+            {
+                // Colocar isla lejos de los bordes para no bloquear pasillos
+                int ix = _random.Next(room.X + 2, room.X + room.Width - 2);
+                int iy = _random.Next(room.Y + 2, room.Y + room.Height - 2);
+                
+                grid[ix, iy] = 1;
+                
+                // 40% de probabilidad de que sea una isla de 2x2 si hay espacio
+                if (_random.NextDouble() < 0.4 && ix + 1 < room.X + room.Width - 2 && iy + 1 < room.Y + room.Height - 2)
+                {
+                    grid[ix + 1, iy] = 1;
+                    grid[ix, iy + 1] = 1;
+                    grid[ix + 1, iy + 1] = 1;
+                }
+            }
+        }
+
+        // Verifica si un punto está dentro de una habitación
+        private bool IsPointInRoom(Point point, Rectangle room)
+        {
+            return point.X >= room.X && point.X < room.X + room.Width && 
+                   point.Y >= room.Y && point.Y < room.Y + room.Height;
         }
 
         private void GenerateCorridors(int[,] grid, List<Point> roomCenters)

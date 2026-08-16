@@ -39,28 +39,13 @@ namespace TwinStickShooter.Rendering
 
             float width = GameConstants.WorldWidth;
             float height = GameConstants.WorldHeight;
-            float gridSize = 100f;
 
-            Color gridColor = new Color(40, 45, 60);
             Color borderColor = new Color(0, 255, 220);
             Color wallColor = new Color(255, 255, 255);
             
             int wallCount = 0;
 
-            // 1. Líneas de la grilla interna
-            for (float x = 0; x <= width; x += gridSize)
-            {
-                vertices.Add(new VertexPositionColor(new Vector3(x, 0, 0), gridColor));
-                vertices.Add(new VertexPositionColor(new Vector3(x, height, 0), gridColor));
-            }
-
-            for (float y = 0; y <= height; y += gridSize)
-            {
-                vertices.Add(new VertexPositionColor(new Vector3(0, y, 0), gridColor));
-                vertices.Add(new VertexPositionColor(new Vector3(width, y, 0), gridColor));
-            }
-
-            // 2. Borde exterior del mundo
+            // 1. Borde exterior del mundo
             Vector3 topLeft = new Vector3(0, 0, 0);
             Vector3 topRight = new Vector3(width, 0, 0);
             Vector3 bottomRight = new Vector3(width, height, 0);
