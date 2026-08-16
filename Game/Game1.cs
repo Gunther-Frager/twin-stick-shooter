@@ -79,18 +79,17 @@ namespace TwinStickShooter
             // Generar un mapa procedural si se desea
             // MapLoader.GenerateProceduralMap(_levelManager);
 
-            // Spawns iniciales repartidos en el centro de la pantalla (placeholder;
-            // en Fase 4 esto vendrá del LevelManager / mapa).
-            Vector2 center = new Vector2(GameConstants.ScreenWidth / 2f, GameConstants.ScreenHeight / 2f);
+            // Spawns iniciales en el marcador de spawn del mapa
+            Vector2 spawnPosition = _levelManager.GetSpawnPosition();
             Vector2[] offsets =
             {
-                new Vector2(-60, -40), new Vector2(60, -40),
-                new Vector2(-60, 40),  new Vector2(60, 40),
+                new Vector2(-18, -18), new Vector2(18, -18),
+                new Vector2(-18, 18),  new Vector2(18, 18),
             };
 
             for (int i = 0; i < GameConstants.MaxPlayers; i++)
             {
-                _players[i] = new Player(i, center + offsets[i]);
+                _players[i] = new Player(i, spawnPosition + offsets[i]);
                 _players[i].IsActive = (i == 0); // Solo el jugador 0 está activo por defecto
             }
 
@@ -135,6 +134,12 @@ namespace TwinStickShooter
                 if (_inputManager.GetState(i).IsConnected)
                 {
                     activePlayers.Add(_players[i]);
+                    // Verifica si el jugador ha alcanzado el marcador de salida
+                    if (_levelManager.CheckExitReached(_players[i].Position))
+                    {
+                        SetDebugMessage("¡Nivel completado!");
+                        // Aquí puedes agregar lógica adicional para finalizar el nivel
+                    }
                 }
             }
             _camera.Update(activePlayers.ToArray());
