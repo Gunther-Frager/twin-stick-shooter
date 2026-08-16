@@ -24,6 +24,7 @@ namespace TwinStickShooter.Core
             _cellSize = cellSize;
             _collisionGrid = new bool[gridWidth, gridHeight];
             _mapGenerator = new MapGenerator(gridWidth, gridHeight, cellSize);
+            _mapGenerator.Initialize();
         }
 
         /// <summary>
@@ -137,6 +138,9 @@ namespace TwinStickShooter.Core
                     _collisionGrid[x, y] = generatedGrid[x, y] == 1;
                 }
             }
+
+            _spawnPosition = _mapGenerator.SpawnPoint;
+            _exitPosition = _mapGenerator.ExitPoint;
         }
     }
 }

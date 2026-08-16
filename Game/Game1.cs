@@ -59,10 +59,10 @@ namespace TwinStickShooter
         protected override void Initialize()
         {
             _inputManager = new InputManager();
-            _bulletManager = new BulletManager();
+            _levelManager = new LevelManager(GameConstants.GridWidth, GameConstants.GridHeight, GameConstants.GridCellSize);
+            _bulletManager = new BulletManager(_levelManager);
             _particleSystem = new ParticleSystem(GameConstants.MaxParticles);
             _camera = new Camera();
-            _levelManager = new LevelManager(GameConstants.GridWidth, GameConstants.GridHeight, GameConstants.GridCellSize);
             _debugConsole = new DebugConsole();
 
             // Cargar el mapa de prueba ANTES de crear el renderer
@@ -77,7 +77,7 @@ namespace TwinStickShooter
             }
 
             // Generar un mapa procedural si se desea
-            // MapLoader.GenerateProceduralMap(_levelManager);
+            MapLoader.GenerateProceduralMap(_levelManager);
 
             // Spawns iniciales en el marcador de spawn del mapa
             Vector2 spawnPosition = _levelManager.GetSpawnPosition();

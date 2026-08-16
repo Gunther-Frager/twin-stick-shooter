@@ -12,10 +12,12 @@ namespace TwinStickShooter.Entities
     public class BulletManager
     {
         private readonly ObjectPool<Bullet> _pool;
+        private readonly LevelManager _levelManager;
 
-        public BulletManager()
+        public BulletManager(LevelManager levelManager)
         {
             _pool = new ObjectPool<Bullet>(GameConstants.MaxBullets);
+            _levelManager = levelManager;
         }
 
         /// <summary>Array fijo de balas (activas e inactivas); usado por el renderer.</summary>
@@ -59,7 +61,9 @@ namespace TwinStickShooter.Entities
                     bullet.Position.Y < -GameConstants.BulletRadius ||
                     bullet.Position.Y > GameConstants.WorldHeight + GameConstants.BulletRadius;
 
-                if (bullet.LifeRemaining <= 0f || offWorld)
+                bool hitWall = _levelManager.CheckCollision(bullet.Position, GameConstants.BulletRadius);
+
+                if (bullet.LifeRemaining <= 0f || offWorld || hitWall)
                 {
                     bullet.Active = false;
                     _pool.Release(bullet.PoolIndex);

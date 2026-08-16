@@ -33,13 +33,24 @@ namespace TwinStickShooter.Entities
                 return;
             }
 
-            Vector2 newPosition = Position + input.MoveDirection * GameConstants.PlayerSpeed * deltaTime;
+            Vector2 moveDelta = input.MoveDirection * GameConstants.PlayerSpeed * deltaTime;
+            Vector2 newPosition = Position + moveDelta;
             
-            // Verificar colisiones con la grilla
-            if (levelManager != null && levelManager.CheckCollision(newPosition, GameConstants.PlayerRadius))
+            // Verificar colisiones por componente (X e Y) para permitir "deslizar" en paredes
+            if (levelManager != null)
             {
-                // Si hay colisión, no actualizar la posición
-                newPosition = Position;
+                bool collisionX = levelManager.CheckCollision(new Vector2(newPosition.X, Position.Y), GameConstants.PlayerRadius);
+                bool collisionY = levelManager.CheckCollision(new Vector2(Position.X, newPosition.Y), GameConstants.PlayerRadius);
+                
+                if (collisionX)
+                {
+                    newPosition.X = Position.X; // No mover en X si hay colisión
+                }
+                
+                if (collisionY)
+                {
+                    newPosition.Y = Position.Y; // No mover en Y si hay colisión
+                }
             }
             
             Position = newPosition;

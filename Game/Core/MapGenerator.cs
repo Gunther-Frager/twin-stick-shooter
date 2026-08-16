@@ -1,12 +1,13 @@
 using Microsoft.Xna.Framework;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace TwinStickShooter.Core
 {
     /// <summary>
-    /// Generador de mapas procedurales con garantía de transitabilidad.
-    /// Utiliza algoritmos de generación de mazmorras y BFS para verificar caminos válidos.
+    /// Generador de mapas procedurales con garantía de transitabilidad vía MST.
+    /// Conecta las habitaciones usando Kruskal y permite loops adicionales.
     /// </summary>
     public class MapGenerator
     {
@@ -14,6 +15,9 @@ namespace TwinStickShooter.Core
         private readonly int _height;
         private readonly int _cellSize;
         private readonly Random _random;
+
+        public Point SpawnPoint { get; private set; }
+        public Point ExitPoint { get; private set; }
 
         public MapGenerator(int width, int height, int cellSize)
         {
@@ -23,14 +27,69 @@ namespace TwinStickShooter.Core
             _random = new Random();
         }
 
-        /// <summary>
-        /// Genera un mapa procedural con habitaciones y pasillos.
-        /// </summary>
+        private class Edge : IComparable<Edge>
+        {
+            public int From { get; set; }
+            public int To { get; set; }
+            public float Distance { get; set; }
+
+            public int CompareTo(Edge other)
+            {
+                return Distance.CompareTo(other.Distance);
+            }
+        }
+
+        private class UnionFind
+        {
+            private readonly int[] _parent;
+            private readonly int[] _rank;
+
+            public UnionFind(int size)
+            {
+                _parent = new int[size];
+                _rank = new int[size];
+                for (int i = 0; i < size; i++)
+                {
+                    _parent[i] = i;
+                }
+            }
+
+            public int Find(int x)
+            {
+                if (_parent[x] != x)
+                {
+                    _parent[x] = Find(_parent[x]);
+                }
+                return _parent[x];
+            }
+
+            public void Union(int x, int y)
+            {
+                int rootX = Find(x);
+                int rootY = Find(y);
+                if (rootX == rootY) return;
+
+                if (_rank[rootX] < _rank[rootY])
+                {
+                    _parent[rootX] = rootY;
+                }
+                else if (_rank[rootX] > _rank[rootY])
+                {
+                    _parent[rootY] = rootX;
+                }
+                else
+                {
+                    _parent[rootY] = rootX;
+                    _rank[rootX]++;
+                }
+            }
+        }
+
         public int[,] GenerateMap()
         {
             int[,] grid = new int[_width, _height];
 
-            // Inicializar el mapa con paredes
+            // 1. Inicializar con paredes
             for (int x = 0; x < _width; x++)
             {
                 for (int y = 0; y < _height; y++)
@@ -39,32 +98,50 @@ namespace TwinStickShooter.Core
                 }
             }
 
-            // Generar habitaciones y pasillos
-            GenerateRooms(grid);
-            GenerateCorridors(grid);
+            // 2. Generar salas y obtener 1 centro exacto por sala
+            List<Rectangle> rooms = GenerateRooms(grid);
+            List<Point> roomCenters = rooms.Select(r => r.Center).ToList();
 
-            // Verificar la transitabilidad
-            if (!IsMapTraversable(grid))
+            // 3. Conectar vía MST (Kruskal) + loops opcionales
+            GenerateCorridors(grid, roomCenters);
+
+            // 4. Spawn en sala inicial, Exit en la sala más lejana
+            if (roomCenters.Count > 0)
             {
-                // Si el mapa no es transitable, regenerarlo
+                SpawnPoint = roomCenters[0];
+                ExitPoint = roomCenters
+                    .OrderByDescending(c => Vector2.Distance(new Vector2(c.X, c.Y), new Vector2(SpawnPoint.X, SpawnPoint.Y)))
+                    .First();
+            }
+            else
+            {
+                SpawnPoint = new Point(1, 1);
+                ExitPoint = new Point(_width - 2, _height - 2);
+            }
+
+            // 5. Verificar transitabilidad con BFS
+            if (!IsMapTraversable(grid, SpawnPoint, ExitPoint))
+            {
+                Console.WriteLine("[MapGenerator] Regenerando mapa (no transitable).");
                 return GenerateMap();
             }
 
             return grid;
         }
 
-        /// <summary>
-        /// Genera habitaciones aleatorias en el mapa.
-        /// </summary>
-        private void GenerateRooms(int[,] grid)
+        private List<Rectangle> GenerateRooms(int[,] grid)
         {
-            int roomCount = _random.Next(3, 6);
+            List<Rectangle> rooms = new List<Rectangle>();
+            int roomCount = _random.Next(4, 7);
+
             for (int i = 0; i < roomCount; i++)
             {
-                int roomWidth = _random.Next(3, 8);
-                int roomHeight = _random.Next(3, 8);
-                int roomX = _random.Next(1, _width - roomWidth - 1);
-                int roomY = _random.Next(1, _height - roomHeight - 1);
+                int roomWidth = _random.Next(4, 8);
+                int roomHeight = _random.Next(4, 8);
+                int roomX = _random.Next(2, _width - roomWidth - 2);
+                int roomY = _random.Next(2, _height - roomHeight - 2);
+
+                Rectangle newRoom = new Rectangle(roomX, roomY, roomWidth, roomHeight);
 
                 for (int x = roomX; x < roomX + roomWidth; x++)
                 {
@@ -73,131 +150,100 @@ namespace TwinStickShooter.Core
                         grid[x, y] = 0;
                     }
                 }
+
+                rooms.Add(newRoom);
             }
+
+            return rooms;
         }
 
-        /// <summary>
-        /// Genera pasillos entre habitaciones para conectar el mapa.
-        /// </summary>
-        private void GenerateCorridors(int[,] grid)
+        private void GenerateCorridors(int[,] grid, List<Point> roomCenters)
         {
-            // Encontrar centros de habitaciones
-            List<Point> roomCenters = new List<Point>();
-            for (int x = 1; x < _width - 1; x++)
+            if (roomCenters.Count < 2) return;
+
+            // Calcular grafo completo de distancias
+            List<Edge> edges = new List<Edge>();
+            for (int i = 0; i < roomCenters.Count; i++)
             {
-                for (int y = 1; y < _height - 1; y++)
+                for (int j = i + 1; j < roomCenters.Count; j++)
                 {
-                    if (grid[x, y] == 0 && IsRoomCenter(grid, x, y))
-                    {
-                        roomCenters.Add(new Point(x, y));
-                    }
+                    float distance = Vector2.Distance(
+                        new Vector2(roomCenters[i].X, roomCenters[i].Y),
+                        new Vector2(roomCenters[j].X, roomCenters[j].Y)
+                    );
+                    edges.Add(new Edge { From = i, To = j, Distance = distance });
                 }
             }
 
-            // Conectar habitaciones con pasillos
-            for (int i = 0; i < roomCenters.Count - 1; i++)
-            {
-                Point start = roomCenters[i];
-                Point end = roomCenters[i + 1];
-                ConnectRooms(grid, start, end);
-            }
-        }
+            edges.Sort();
 
-        /// <summary>
-        /// Verifica si una celda es el centro de una habitación.
-        /// </summary>
-        private bool IsRoomCenter(int[,] grid, int x, int y)
-        {
-            // Verificar si hay espacio vacío alrededor
-            for (int dx = -1; dx <= 1; dx++)
+            UnionFind uf = new UnionFind(roomCenters.Count);
+            List<Edge> mstEdges = new List<Edge>();
+            List<Edge> remainingEdges = new List<Edge>();
+
+            foreach (Edge edge in edges)
             {
-                for (int dy = -1; dy <= 1; dy++)
+                if (uf.Find(edge.From) != uf.Find(edge.To))
                 {
-                    if (grid[x + dx, y + dy] != 0)
-                    {
-                        return false;
-                    }
+                    uf.Union(edge.From, edge.To);
+                    mstEdges.Add(edge);
+                }
+                else
+                {
+                    remainingEdges.Add(edge);
                 }
             }
-            return true;
+
+            // Conectar aristas del MST
+            foreach (Edge edge in mstEdges)
+            {
+                ConnectRooms(grid, roomCenters[edge.From], roomCenters[edge.To]);
+            }
+
+            // Flag / Opción: 1 a 2 aristas extra para crear loops (evita pasillos únicos aburridos)
+            bool addLoops = true;
+            if (addLoops && remainingEdges.Count > 0)
+            {
+                int loopsToAdd = Math.Min(_random.Next(1, 3), remainingEdges.Count);
+                for (int i = 0; i < loopsToAdd; i++)
+                {
+                    int index = _random.Next(remainingEdges.Count);
+                    Edge extra = remainingEdges[index];
+                    ConnectRooms(grid, roomCenters[extra.From], roomCenters[extra.To]);
+                    remainingEdges.RemoveAt(index);
+                }
+            }
         }
 
-        /// <summary>
-        /// Conecta dos habitaciones con un pasillo.
-        /// </summary>
         private void ConnectRooms(int[,] grid, Point start, Point end)
         {
-            // Moverse horizontalmente hasta la misma columna
             int x = start.X;
             int y = start.Y;
+
             while (x != end.X)
             {
                 grid[x, y] = 0;
                 x += Math.Sign(end.X - x);
             }
 
-            // Moverse verticalmente hasta la misma fila
             while (y != end.Y)
             {
                 grid[x, y] = 0;
                 y += Math.Sign(end.Y - y);
             }
+            grid[end.X, end.Y] = 0;
         }
 
-        /// <summary>
-        /// Verifica si el mapa es transitable desde el punto de inicio hasta el punto de salida.
-        /// </summary>
-        private bool IsMapTraversable(int[,] grid)
+        public bool IsMapTraversable(int[,] grid, Point start, Point end)
         {
-            Point start = FindStartPoint(grid);
-            Point end = FindEndPoint(grid);
-
             return BFS(grid, start, end);
         }
 
-        /// <summary>
-        /// Encuentra un punto de inicio válido en el mapa.
-        /// </summary>
-        private Point FindStartPoint(int[,] grid)
-        {
-            // Buscar una celda vacía cerca del borde izquierdo
-            for (int x = 1; x < _width - 1; x++)
-            {
-                for (int y = 1; y < _height - 1; y++)
-                {
-                    if (grid[x, y] == 0)
-                    {
-                        return new Point(x, y);
-                    }
-                }
-            }
-            return new Point(1, 1);
-        }
-
-        /// <summary>
-        /// Encuentra un punto de salida válido en el mapa.
-        /// </summary>
-        private Point FindEndPoint(int[,] grid)
-        {
-            // Buscar una celda vacía cerca del borde derecho
-            for (int x = _width - 2; x > 0; x--)
-            {
-                for (int y = _height - 2; y > 0; y--)
-                {
-                    if (grid[x, y] == 0)
-                    {
-                        return new Point(x, y);
-                    }
-                }
-            }
-            return new Point(_width - 2, _height - 2);
-        }
-
-        /// <summary>
-        /// Algoritmo BFS para verificar la transitabilidad del mapa.
-        /// </summary>
         private bool BFS(int[,] grid, Point start, Point end)
         {
+            if (grid[start.X, start.Y] != 0 || grid[end.X, end.Y] != 0)
+                return false;
+
             Queue<Point> queue = new Queue<Point>();
             bool[,] visited = new bool[_width, _height];
 
@@ -230,6 +276,25 @@ namespace TwinStickShooter.Core
             }
 
             return false;
+        }
+
+        public void TestMapTraversability(int mapCount = 50)
+        {
+            int validCount = 0;
+            for (int i = 0; i < mapCount; i++)
+            {
+                int[,] grid = GenerateMap();
+                if (IsMapTraversable(grid, SpawnPoint, ExitPoint))
+                {
+                    validCount++;
+                }
+            }
+            Console.WriteLine($"[MapGenerator] Baseline MST: {validCount}/{mapCount} mapas transitables directamente.");
+        }
+
+        public void Initialize()
+        {
+            TestMapTraversability(50);
         }
     }
 }
