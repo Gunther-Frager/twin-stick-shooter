@@ -8,12 +8,15 @@ namespace TwinStickShooter.Entities
     /// Representa a un jugador en el mundo. En Fase 1 solo maneja
     /// posición, ángulo de apuntado y color; sin vida/combate todavía.
     /// </summary>
-    public class Player
+    public class Player : IEntity
     {
         public readonly int Index;
-        public readonly Color Color;
+        public Color Color { get; set; }
 
-        public Vector2 Position;
+        public Vector2 Position { get; set; }
+        public float Radius => GameConstants.PlayerRadius;
+        public bool Active { get => IsActive; set => IsActive = value; }
+
         public float FacingAngle; // radianes, 0 = mirando a la derecha (+X)
         public bool ShieldActive;
         public bool IsActive;
@@ -34,27 +37,17 @@ namespace TwinStickShooter.Entities
             }
 
             Vector2 moveDelta = input.MoveDirection * GameConstants.PlayerSpeed * deltaTime;
-            Vector2 newPosition = Position + moveDelta;
             
-            // Verificar colisiones por componente (X e Y) para permitir "deslizar" en paredes
             if (levelManager != null)
             {
-                bool collisionX = levelManager.CheckCollision(new Vector2(newPosition.X, Position.Y), GameConstants.PlayerRadius);
-                bool collisionY = levelManager.CheckCollision(new Vector2(Position.X, newPosition.Y), GameConstants.PlayerRadius);
-                
-                if (collisionX)
-                {
-                    newPosition.X = Position.X; // No mover en X si hay colisión
-                }
-                
-                if (collisionY)
-                {
-                    newPosition.Y = Position.Y; // No mover en Y si hay colisión
-                }
+                Position = PhysicsHelper.MoveWithCollision(this, moveDelta, levelManager);
+            }
+            else
+            {
+                Position += moveDelta;
             }
             
-            Position = newPosition;
-            ClampToWorld();
+            Position = PhysicsHelper.ClampToWorld(Position, Radius);
 
             if (input.AimDirection != Vector2.Zero)
             {
@@ -64,11 +57,6 @@ namespace TwinStickShooter.Entities
             ShieldActive = input.ShieldHeld;
         }
 
-        private void ClampToWorld()
-        {
-            float r = GameConstants.PlayerRadius;
-            Position.X = MathHelper.Clamp(Position.X, r, GameConstants.WorldWidth - r);
-            Position.Y = MathHelper.Clamp(Position.Y, r, GameConstants.WorldHeight - r);
-        }
+
     }
 }

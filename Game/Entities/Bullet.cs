@@ -10,13 +10,14 @@ namespace TwinStickShooter.Entities
     /// </summary>
     public class Bullet : IPoolable
     {
-        public bool Active;
+        public bool Active { get; set; }
         public int PoolIndex;
-        public Vector2 Position;
+        public Vector2 Position { get; set; }
+        public float Radius => GameConstants.BulletRadius;
+        public Color Color { get; set; }
         public Vector2 Velocity;
         public int OwnerIndex;
         public float LifeRemaining;
-        public Color Color;
 
         public void Reset()
         {
