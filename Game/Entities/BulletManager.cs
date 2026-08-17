@@ -56,12 +56,12 @@ namespace TwinStickShooter.Entities
                 bullet.LifeRemaining -= deltaTime;
 
                 bool offWorld =
-                    bullet.Position.X < -GameConstants.BulletRadius ||
-                    bullet.Position.X > GameConstants.WorldWidth + GameConstants.BulletRadius ||
-                    bullet.Position.Y < -GameConstants.BulletRadius ||
-                    bullet.Position.Y > GameConstants.WorldHeight + GameConstants.BulletRadius;
+                    bullet.Position.X < -bullet.Radius ||
+                    bullet.Position.X > GameConstants.WorldWidth + bullet.Radius ||
+                    bullet.Position.Y < -bullet.Radius ||
+                    bullet.Position.Y > GameConstants.WorldHeight + bullet.Radius;
 
-                bool hitWall = _levelManager.CheckCollision(bullet.Position, GameConstants.BulletRadius);
+                bool hitWall = _levelManager.CheckCollision(bullet.Position, bullet.Radius);
 
                 if (bullet.LifeRemaining <= 0f || offWorld || hitWall)
                 {

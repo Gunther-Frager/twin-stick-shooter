@@ -38,7 +38,7 @@ namespace TwinStickShooter.Core
             for (int i = 0; i < players.Length; i++)
             {
                 Player player = players[i];
-                if (player != null && player.IsActive && inputManager.GetState(i).IsConnected)
+                if (player != null && player.IsActive)
                 {
                     Vector2 pos = player.Position;
                     centerOfMass += pos;

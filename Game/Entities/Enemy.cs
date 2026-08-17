@@ -10,12 +10,12 @@ namespace TwinStickShooter.Entities
     /// </summary>
     public class Enemy : IPoolable
     {
-        public bool Active;
+        public bool Active { get; set; }
         public int PoolIndex;
-        public Vector2 Position;
+        public Vector2 Position { get; set; }
+        public float Radius { get; set; }
+        public Color Color { get; set; }
         public Vector2 Velocity;
-        public float Radius;
-        public Color Color;
 
         public void Reset()
         {
