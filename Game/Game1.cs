@@ -92,7 +92,7 @@ namespace TwinStickShooter
 
             // Contar paredes para depuración
             int wallCount = CountWalls();
-            Console.WriteLine($"[Game1] Paredes en el mapa: {wallCount}");
+            SetDebugMessage($"Mapa cargado: {wallCount} colisiones");
 
             base.Initialize();
         }
@@ -365,7 +365,7 @@ namespace TwinStickShooter
             MapLoader.GenerateProceduralMap(_levelManager);
             _arenaRenderer.RebuildGeometry();
             int wallCount = CountWalls();
-            Console.WriteLine($"[Game1] Paredes en el mapa generado: {wallCount}");
+            SetDebugMessage($"Mapa generado: {wallCount} colisiones");
         }
 
         /// <summary>

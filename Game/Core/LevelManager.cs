@@ -35,7 +35,6 @@ namespace TwinStickShooter.Core
             if (x >= 0 && x < _gridWidth && y >= 0 && y < _gridHeight)
             {
                 _collisionGrid[x, y] = collides;
-                System.Diagnostics.Debug.WriteLine("[LevelManager] Celda marcada como colisionable: (" + x + ", " + y + ") = " + collides);
             }
         }
 
