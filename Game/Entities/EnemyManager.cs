@@ -1,3 +1,4 @@
+using System;
 using Microsoft.Xna.Framework;
 using TwinStickShooter.Core;
 
@@ -39,6 +40,7 @@ namespace TwinStickShooter.Entities
         public void Update(float deltaTime)
         {
             Enemy[] items = _pool.Items;
+            int activeEnemies = 0;
 
             for (int i = 0; i < items.Length; i++)
             {
@@ -47,6 +49,8 @@ namespace TwinStickShooter.Entities
                 {
                     continue;
                 }
+                activeEnemies++;
+                Console.WriteLine($"[EnemyManager] Enemigo activo en posición: {enemy.Position}");
 
                 enemy.Position += enemy.Velocity * deltaTime;
 
@@ -62,8 +66,10 @@ namespace TwinStickShooter.Entities
                 {
                     enemy.Active = false;
                     _pool.Release(enemy.PoolIndex);
+                    Console.WriteLine($"[EnemyManager] Enemigo desactivado por colisión o fuera del mundo.");
                 }
             }
+            Console.WriteLine($"[EnemyManager] Enemigos activos: {activeEnemies}");
         }
     }
 }

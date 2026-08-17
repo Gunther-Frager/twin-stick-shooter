@@ -26,6 +26,8 @@ namespace TwinStickShooter
         private BulletManager _bulletManager;
         private ParticleSystem _particleSystem;
         private LevelManager _levelManager;
+        private EnemyManager _enemyManager;
+        private EnemyRenderer _enemyRenderer;
 
         // Estado del juego
         private GameState _currentGameState = GameState.SinglePlayer;
@@ -76,6 +78,7 @@ namespace TwinStickShooter
             _particleRenderer = new ParticleRenderer(GraphicsDevice);
             _arenaRenderer = new ArenaRenderer(GraphicsDevice, _levelManager);
             _arenaRenderer.RebuildGeometry(); // Reconstruir geometría con el mapa cargado
+            _enemyRenderer = new EnemyRenderer(GraphicsDevice);
             _debugConsole.LoadContent(GraphicsDevice);
         }
 
@@ -132,7 +135,8 @@ namespace TwinStickShooter
                 UpdateThruster(player, in input, i, deltaTime);
             }
 
-            _bulletManager.Update(deltaTime);
+            _bulletManager.Update(deltaTime, _enemyManager.Enemies);
+            _enemyManager.Update(deltaTime);
             _particleSystem.Update(deltaTime);
 
             UpdateDebugTitle(gameTime);
@@ -208,9 +212,10 @@ namespace TwinStickShooter
 
             Matrix viewMatrix = _camera.ViewMatrix;
 
-            // Orden de dibujo: arena atrás, partículas, naves en medio, balas encima.
+            // Orden de dibujo: arena atrás, partículas, enemigos, naves en medio, balas encima.
             _arenaRenderer.Draw(viewMatrix);
             _particleRenderer.Draw(GraphicsDevice, _particleSystem.Particles, viewMatrix);
+            _enemyRenderer.Draw(GraphicsDevice, _enemyManager.Enemies, viewMatrix);
             _shipRenderer.Draw(GraphicsDevice, _players, viewMatrix);
             _bulletRenderer.Draw(GraphicsDevice, _bulletManager.Bullets, viewMatrix);
 
@@ -349,6 +354,7 @@ namespace TwinStickShooter
             _levelManager = new LevelManager(GameConstants.GridWidth, GameConstants.GridHeight, GameConstants.GridCellSize);
             _bulletManager = new BulletManager(_levelManager);
             _particleSystem = new ParticleSystem(GameConstants.MaxParticles);
+            _enemyManager = new EnemyManager(_levelManager);
             _camera = new Camera();
             _debugConsole = new DebugConsole();
         }
@@ -361,6 +367,42 @@ namespace TwinStickShooter
             // Cargar el mapa de prueba ANTES de crear el renderer
             // Generar un mapa procedural
             MapLoader.GenerateProceduralMap(_levelManager);
+            SpawnTestEnemies();
+        }
+
+        /// <summary>
+        /// Spawnea enemigos de prueba en posiciones válidas dentro del mapa.
+        /// </summary>
+        private void SpawnTestEnemies()
+        {
+            // Spawnear 1-2 enemigos en posiciones fijas dentro del mapa
+            Vector2 spawnPosition = _levelManager.GetSpawnPosition();
+            Console.WriteLine($"[Game1] SpawnPosition: {spawnPosition}");
+            Vector2[] enemyPositions = 
+            {
+                spawnPosition + new Vector2(50, 50),
+                spawnPosition + new Vector2(100, 100)
+            };
+
+            for (int i = 0; i < 2; i++)
+            {
+                Vector2 position = enemyPositions[i];
+                Console.WriteLine($"[Game1] Intentando spawnear enemigo {i} en posición: {position}");
+                // Validar que la posición sea transitable
+                if (_levelManager.IsWalkable(position, GameConstants.EnemyRadius))
+                {
+                    Console.WriteLine($"[Game1] Posición válida para enemigo {i}. Spawneando...");
+                    _enemyManager.Spawn(position, new Vector2(10f, 10f));
+                }
+                else
+                {
+                    Console.WriteLine($"[Game1] ADVERTENCIA: Posición no válida para enemigo {i}. Buscando alternativa...");
+                    // Buscar una posición alternativa cercana
+                    Vector2 alternativePosition = FindValidSpawnPosition(position, spawnPosition);
+                    Console.WriteLine($"[Game1] Posición alternativa para enemigo {i}: {alternativePosition}");
+                    _enemyManager.Spawn(alternativePosition, new Vector2(10f, 10f));
+                }
+            }
         }
 
         /// <summary>
