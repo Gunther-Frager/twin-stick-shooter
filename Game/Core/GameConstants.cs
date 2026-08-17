@@ -66,5 +66,25 @@ namespace TwinStickShooter.Core
         
         // --- Generación de mapas ---
         public const int MaxGenerationAttempts = 20; // Intentos máximos para generar un mapa transitable
+        public const float MinSpawnExitDistance = 15f; // Distancia mínima en celdas entre spawn y salida
+        public const int MinRoomCount = 8;
+        public const int MaxRoomCount = 12;
+        public const int SpawnRoomMaxSize = 3;
+        public const int SpawnRoomMinWidth = 2;
+        public const int SpawnRoomMaxWidth = 4; // Exclusivo para Random.Next(2, 4)
+        public const int MediumRoomMinWidth = 6;
+        public const int MediumRoomMaxWidth = 10; // Exclusivo para Random.Next(6, 10)
+        public const float MediumRoomProbability = 0.2f;
+        public const int StandardRoomMinWidth = 4;
+        public const int StandardRoomMaxWidth = 7; // Exclusivo para Random.Next(4, 7)
+        public const int MaxRoomPlacementAttempts = 15;
+        public const int RoomPadding = 1; // Margen de overlap entre salas (+1/+2 en el Rectangle)
+        public const int IslandMinRoomSize = 6; // Umbral de tamaño de sala para agregar islas
+        public const int MinIslandsPerRoom = 1;
+        public const int MaxIslandsPerRoom = 3; // Exclusivo para Random.Next(1, 3)
+        public const int IslandEdgePadding = 2; // Distancia a los bordes de la sala para colocar islas
+        public const double LargeIslandProbability = 0.4;
+        public const int MinExtraLoops = 1;
+        public const int MaxExtraLoops = 3; // Exclusivo para Random.Next(1, 3)
     }
 }
