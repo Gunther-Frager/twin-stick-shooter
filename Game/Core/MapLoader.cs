@@ -54,10 +54,19 @@ namespace TwinStickShooter.Core
                     Point spawnPoint = ValidateSpawnPoint(levelManager, mapData.spawn.x, mapData.spawn.y);
                     levelManager.SetSpawnPosition(spawnPoint.X, spawnPoint.Y);
                 }
+                else
+                {
+                    Console.WriteLine("[MapLoader] ERROR: El mapa no define un punto de 'spawn'.");
+                }
+
                 if (mapData.exit != null)
                 {
                     Point exitPoint = ValidateSpawnPoint(levelManager, mapData.exit.x, mapData.exit.y);
                     levelManager.SetExitPosition(exitPoint.X, exitPoint.Y);
+                }
+                else
+                {
+                    Console.WriteLine("[MapLoader] ERROR: El mapa no define un punto de 'exit'.");
                 }
             }
             catch (Exception ex)

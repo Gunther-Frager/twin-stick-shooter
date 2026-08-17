@@ -89,84 +89,94 @@ namespace TwinStickShooter.Core
         {
             int[,] grid = new int[_width, _height];
 
-            // 1. Inicializar con paredes
-            for (int x = 0; x < _width; x++)
+            for (int attempt = 0; attempt < GameConstants.MaxGenerationAttempts; attempt++)
             {
-                for (int y = 0; y < _height; y++)
+                // 1. Inicializar con paredes
+                for (int x = 0; x < _width; x++)
                 {
-                    grid[x, y] = 1;
-                }
-            }
-
-            // 2. Generar salas y obtener 1 centro exacto por sala
-            List<Rectangle> rooms = GenerateRooms(grid);
-            List<Point> roomCenters = rooms.Select(r => r.Center).ToList();
-
-            // 3. Conectar vía MST (Kruskal) + loops opcionales
-            GenerateCorridors(grid, roomCenters);
-
-            // 4. Spawn en sala inicial (muy pequeña), Exit en la sala más lejana
-            if (rooms.Count > 0)
-            {
-                // Obtener la habitación del spawn (siempre la primera, pequeña)
-                Rectangle spawnRoom = rooms[0];
-                Console.WriteLine($"[MapGenerator] Habitación de spawn: {spawnRoom.Width}x{spawnRoom.Height} en ({spawnRoom.X}, {spawnRoom.Y})");
-                
-                // Validar que la habitación de spawn sea pequeña (2x2 a 3x3)
-                if (spawnRoom.Width > 3 || spawnRoom.Height > 3)
-                {
-                    Console.WriteLine("[MapGenerator] WARNING: La habitación de spawn es demasiado grande. Regenerando mapa.");
-                    return GenerateMap();
-                }
-                
-                // Asegurar que el spawn esté DENTRO de la habitación pequeña
-                SpawnPoint = new Point(
-                    spawnRoom.X + spawnRoom.Width / 2,
-                    spawnRoom.Y + spawnRoom.Height / 2
-                );
-                
-                if (roomCenters.Count > 1)
-                {
-                    // Filtrar centros que estén en habitaciones distintas y a una distancia mínima
-                    var distantCenters = roomCenters
-                        .Where((c, index) => index > 0 && // Excluir la habitación del spawn
-                               !IsPointInRoom(c, spawnRoom) && // Asegurar que no esté en la misma habitación
-                               Vector2.Distance(new Vector2(c.X, c.Y), new Vector2(SpawnPoint.X, SpawnPoint.Y)) > 15) // Distancia mínima
-                        .OrderByDescending(c => Vector2.Distance(new Vector2(c.X, c.Y), new Vector2(SpawnPoint.X, SpawnPoint.Y)))
-                        .ToList();
-                    
-                    if (distantCenters.Count > 0)
+                    for (int y = 0; y < _height; y++)
                     {
-                        ExitPoint = distantCenters[0];
+                        grid[x, y] = 1;
+                    }
+                }
+
+                // 2. Generar salas y obtener 1 centro exacto por sala
+                List<Rectangle> rooms = GenerateRooms(grid);
+                List<Point> roomCenters = rooms.Select(r => r.Center).ToList();
+
+                // 3. Conectar vía MST (Kruskal) + loops opcionales
+                GenerateCorridors(grid, roomCenters);
+
+                // 4. Spawn en sala inicial (muy pequeña), Exit en la sala más lejana
+                bool validSpawn = false;
+                if (rooms.Count > 0)
+                {
+                    // Obtener la habitación del spawn (siempre la primera, pequeña)
+                    Rectangle spawnRoom = rooms[0];
+                    
+                    // Validar que la habitación de spawn sea pequeña (2x2 a 3x3)
+                    if (spawnRoom.Width <= 3 && spawnRoom.Height <= 3)
+                    {
+                        validSpawn = true;
+                        // Asegurar que el spawn esté DENTRO de la habitación pequeña
+                        SpawnPoint = new Point(
+                            spawnRoom.X + spawnRoom.Width / 2,
+                            spawnRoom.Y + spawnRoom.Height / 2
+                        );
+                        
+                        if (roomCenters.Count > 1)
+                        {
+                            // Filtrar centros que estén en habitaciones distintas y a una distancia mínima
+                            var distantCenters = roomCenters
+                                .Where((c, index) => index > 0 && // Excluir la habitación del spawn
+                                       !IsPointInRoom(c, spawnRoom) && // Asegurar que no esté en la misma habitación
+                                       Vector2.Distance(new Vector2(c.X, c.Y), new Vector2(SpawnPoint.X, SpawnPoint.Y)) > 15) // Distancia mínima
+                                .OrderByDescending(c => Vector2.Distance(new Vector2(c.X, c.Y), new Vector2(SpawnPoint.X, SpawnPoint.Y)))
+                                .ToList();
+                            
+                            if (distantCenters.Count > 0)
+                            {
+                                ExitPoint = distantCenters[0];
+                            }
+                            else
+                            {
+                                // Si no hay habitaciones suficientemente lejanas, elegir la más lejana disponible
+                                ExitPoint = roomCenters
+                                    .Where((c, index) => index > 0 && !IsPointInRoom(c, spawnRoom))
+                                    .OrderByDescending(c => Vector2.Distance(new Vector2(c.X, c.Y), new Vector2(SpawnPoint.X, SpawnPoint.Y)))
+                                    .FirstOrDefault(new Point(_width - 2, _height - 2));
+                            }
+                        }
+                        else
+                        {
+                            ExitPoint = new Point(_width - 2, _height - 2); // Fallback extremo
+                        }
                     }
                     else
                     {
-                        // Si no hay habitaciones suficientemente lejanas, elegir la más lejana disponible
-                        ExitPoint = roomCenters
-                            .Where((c, index) => index > 0 && !IsPointInRoom(c, spawnRoom))
-                            .OrderByDescending(c => Vector2.Distance(new Vector2(c.X, c.Y), new Vector2(SpawnPoint.X, SpawnPoint.Y)))
-                            .FirstOrDefault(new Point(_width - 2, _height - 2));
+                        Console.WriteLine($"[MapGenerator] Intento {attempt + 1}: Habitación de spawn demasiado grande ({spawnRoom.Width}x{spawnRoom.Height}).");
                     }
                 }
                 else
                 {
-                    ExitPoint = new Point(_width - 2, _height - 2); // Fallback extremo
+                    SpawnPoint = new Point(1, 1);
+                    ExitPoint = new Point(_width - 2, _height - 2);
+                    Console.WriteLine($"[MapGenerator] Intento {attempt + 1}: No se generaron habitaciones.");
+                }
+
+                // 5. Verificar transitabilidad con BFS
+                if (validSpawn && IsMapTraversable(grid, SpawnPoint, ExitPoint))
+                {
+                    return grid;
+                }
+                
+                if (validSpawn)
+                {
+                    Console.WriteLine($"[MapGenerator] Intento {attempt + 1}: Mapa no transitable.");
                 }
             }
-            else
-            {
-                SpawnPoint = new Point(1, 1);
-                ExitPoint = new Point(_width - 2, _height - 2);
-                Console.WriteLine("[MapGenerator] WARNING: No se generaron habitaciones. Usando fallback.");
-            }
 
-            // 5. Verificar transitabilidad con BFS
-            if (!IsMapTraversable(grid, SpawnPoint, ExitPoint))
-            {
-                Console.WriteLine("[MapGenerator] Regenerando mapa (no transitable).");
-                return GenerateMap();
-            }
-
+            Console.WriteLine("[MapGenerator] WARNING: Se agotaron los intentos de generación. Devolviendo último mapa generado.");
             return grid;
         }
 
