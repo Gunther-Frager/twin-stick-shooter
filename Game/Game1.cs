@@ -125,12 +125,10 @@ namespace TwinStickShooter
             }
 
             // Actualiza la cámara con los jugadores activos
-            var activePlayers = new List<Player>();
             for (int i = 0; i < GameConstants.MaxPlayers; i++)
             {
-                if (_inputManager.GetState(i).IsConnected)
+                if (_players[i].IsActive && _inputManager.GetState(i).IsConnected)
                 {
-                    activePlayers.Add(_players[i]);
                     // Verifica si el jugador ha alcanzado el marcador de salida
                     if (_levelManager.CheckExitReached(_players[i].Position))
                     {
@@ -139,7 +137,7 @@ namespace TwinStickShooter
                     }
                 }
             }
-            _camera.Update(activePlayers.ToArray());
+            _camera.Update(_players, _inputManager);
 
             for (int i = 0; i < GameConstants.MaxPlayers; i++)
             {
