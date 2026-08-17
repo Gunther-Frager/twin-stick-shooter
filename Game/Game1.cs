@@ -28,6 +28,7 @@ namespace TwinStickShooter
         private LevelManager _levelManager;
         private EnemyManager _enemyManager;
         private EnemyRenderer _enemyRenderer;
+        private List<RoomTemplateData> _roomTemplates;
 
         // Estado del juego
         private GameState _currentGameState = GameState.SinglePlayer;
@@ -357,6 +358,10 @@ namespace TwinStickShooter
             _enemyManager = new EnemyManager(_levelManager);
             _camera = new Camera();
             _debugConsole = new DebugConsole();
+
+            // Cargar plantillas de sala para uso futuro
+            _roomTemplates = RoomTemplateLoader.LoadAll(Content);
+            Console.WriteLine($"[Game1] Plantillas de sala cargadas: {_roomTemplates.Count}");
         }
 
         /// <summary>
