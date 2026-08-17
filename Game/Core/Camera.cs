@@ -1,7 +1,7 @@
 using Microsoft.Xna.Framework;
 using System;
-using System.Linq;
 using TwinStickShooter.Entities;
+using TwinStickShooter.Input;
 
 namespace TwinStickShooter.Core
 {
@@ -19,33 +19,44 @@ namespace TwinStickShooter.Core
         /// <summary>
         /// Actualiza la posición y el zoom de la cámara en base a los jugadores activos.
         /// </summary>
-        /// <param name="players">Lista de jugadores activos.</param>
-        public void Update(Player[] players)
+        /// <param name="players">Array de todos los jugadores.</param>
+        /// <param name="inputManager">Manager de input para verificar conexión.</param>
+        public void Update(Player[] players, InputManager inputManager)
         {
-            if (players == null || players.Length == 0)
+            if (players == null || inputManager == null)
                 return;
 
-            // 1. Calcular centro de masa (promedio de posiciones)
+            // 1. Calcular centro de masa y límites (min/max) en un solo bucle sin allocations
             Vector2 centerOfMass = Vector2.Zero;
             int activeCount = 0;
-            foreach (var player in players)
+
+            float minX = float.MaxValue;
+            float maxX = float.MinValue;
+            float minY = float.MaxValue;
+            float maxY = float.MinValue;
+
+            for (int i = 0; i < players.Length; i++)
             {
-                if (player != null)
+                Player player = players[i];
+                if (player != null && player.IsActive && inputManager.GetState(i).IsConnected)
                 {
-                    centerOfMass += player.Position;
+                    Vector2 pos = player.Position;
+                    centerOfMass += pos;
                     activeCount++;
+
+                    if (pos.X < minX) minX = pos.X;
+                    if (pos.X > maxX) maxX = pos.X;
+                    if (pos.Y < minY) minY = pos.Y;
+                    if (pos.Y > maxY) maxY = pos.Y;
                 }
             }
+
             if (activeCount == 0)
                 return;
+
             centerOfMass /= activeCount;
 
             // 2. Calcular zoom necesario para que todos los jugadores entren en pantalla con padding
-            float minX = players.Where(p => p != null).Min(p => p.Position.X);
-            float maxX = players.Where(p => p != null).Max(p => p.Position.X);
-            float minY = players.Where(p => p != null).Min(p => p.Position.Y);
-            float maxY = players.Where(p => p != null).Max(p => p.Position.Y);
-
             // Evitar división por cero si todos los jugadores están en la misma posición
             float requiredWidth = (maxX - minX) + (2 * GameConstants.CameraPadding);
             float requiredHeight = (maxY - minY) + (2 * GameConstants.CameraPadding);
