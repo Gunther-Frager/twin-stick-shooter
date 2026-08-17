@@ -1,3 +1,4 @@
+using System;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using TwinStickShooter.Core;
@@ -36,6 +37,7 @@ namespace TwinStickShooter.Rendering
             _effect.View = viewMatrix;
 
             int vertexCount = 0;
+            int activeEnemies = 0;
 
             for (int i = 0; i < enemies.Length; i++)
             {
@@ -44,6 +46,8 @@ namespace TwinStickShooter.Rendering
                 {
                     continue;
                 }
+                activeEnemies++;
+                Console.WriteLine($"[EnemyRenderer] Dibujando enemigo en posición: {enemy.Position}");
 
                 Vector2 p = enemy.Position;
                 float r = enemy.Radius;
@@ -61,8 +65,10 @@ namespace TwinStickShooter.Rendering
                 _vertices[vertexCount++] = new VertexPositionColor(bottomLeft, enemy.Color);
             }
 
+            Console.WriteLine($"[EnemyRenderer] Enemigos activos para dibujar: {activeEnemies}");
             if (vertexCount == 0)
             {
+                Console.WriteLine("[EnemyRenderer] No hay enemigos para dibujar.");
                 return;
             }
 

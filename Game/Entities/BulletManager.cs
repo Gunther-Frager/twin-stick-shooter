@@ -40,7 +40,7 @@ namespace TwinStickShooter.Entities
             bullet.Color = color;
         }
 
-        public void Update(float deltaTime)
+        public void Update(float deltaTime, Enemy[] enemies)
         {
             Bullet[] items = _pool.Items;
 
@@ -63,7 +63,26 @@ namespace TwinStickShooter.Entities
 
                 bool hitWall = _levelManager.CheckCollision(bullet.Position, bullet.Radius);
 
-                if (bullet.LifeRemaining <= 0f || offWorld || hitWall)
+                // Verificar colisión con enemigos
+                bool hitEnemy = false;
+                for (int j = 0; j < enemies.Length; j++)
+                {
+                    Enemy enemy = enemies[j];
+                    if (!enemy.Active)
+                    {
+                        continue;
+                    }
+
+                    float distance = Vector2.Distance(bullet.Position, enemy.Position);
+                    if (distance < bullet.Radius + enemy.Radius)
+                    {
+                        hitEnemy = true;
+                        enemy.Active = false;
+                        break;
+                    }
+                }
+
+                if (bullet.LifeRemaining <= 0f || offWorld || hitWall || hitEnemy)
                 {
                     bullet.Active = false;
                     _pool.Release(bullet.PoolIndex);
