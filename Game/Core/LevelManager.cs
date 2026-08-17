@@ -62,6 +62,15 @@ namespace TwinStickShooter.Core
         }
 
         /// <summary>
+        /// Verifica si una posición en el mundo es transitable (no colisiona con paredes).
+        /// Wrapper de CheckCollision invertido para mayor legibilidad.
+        /// </summary>
+        public bool IsWalkable(Vector2 worldPosition, float radius)
+        {
+            return !CheckCollision(worldPosition, radius);
+        }
+
+        /// <summary>
         /// Convierte una posición en el mundo a coordenadas de grilla.
         /// </summary>
         public Point WorldToGrid(Vector2 worldPosition)
