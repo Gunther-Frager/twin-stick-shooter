@@ -286,7 +286,7 @@ namespace TwinStickShooter
         /// <summary>
         /// Busca una posición válida cerca de la posición original para spawnear un jugador.
         /// </summary>
-        private Vector2 FindValidSpawnPosition(Vector2 originalPosition)
+        private Vector2 FindValidSpawnPosition(Vector2 originalPosition, Vector2 spawnRoomCenter)
         {
             // Buscar en un radio creciente alrededor de la posición original
             for (int radius = 1; radius < 20; radius++)
@@ -298,15 +298,15 @@ namespace TwinStickShooter
                         (float)Math.Cos(radians) * radius * GameConstants.GridCellSize,
                         (float)Math.Sin(radians) * radius * GameConstants.GridCellSize
                     );
-                    if (!_levelManager.CheckCollision(testPosition, GameConstants.PlayerRadius))
+                    if (_levelManager.IsWalkable(testPosition, GameConstants.PlayerRadius))
                     {
                         return testPosition;
                     }
                 }
             }
-            // Si no se encuentra una posición válida, devolver la original (aunque sea inválida)
-            Console.WriteLine("[Game1] ADVERTENCIA: No se encontró una posición válida para spawnear al jugador.");
-            return originalPosition;
+            // Si no se encuentra una posición válida, hacer clamp hacia el centro de la sala de spawn
+            Console.WriteLine("[Game1] ADVERTENCIA: No se encontró una posición válida para spawnear al jugador. Haciendo clamp al centro de la sala.");
+            return spawnRoomCenter;
         }
 
         /// <summary>
@@ -375,15 +375,18 @@ namespace TwinStickShooter
                 new Vector2(-18, -18), new Vector2(18, -18),
                 new Vector2(-18, 18),  new Vector2(18, 18),
             };
+            
+            // Calcular el centro de la sala de spawn (asumiendo que spawnPosition es la esquina superior izquierda)
+            Vector2 spawnRoomCenter = spawnPosition + new Vector2(18, 18);
 
             for (int i = 0; i < GameConstants.MaxPlayers; i++)
             {
                 Vector2 playerSpawnPosition = spawnPosition + offsets[i];
-                // Validar que la posición de spawn no esté en una pared
-                if (_levelManager.CheckCollision(playerSpawnPosition, GameConstants.PlayerRadius))
+                // Validar que la posición de spawn sea transitable
+                if (!_levelManager.IsWalkable(playerSpawnPosition, GameConstants.PlayerRadius))
                 {
-                    // Si está en una pared, buscar una posición cercana válida
-                    playerSpawnPosition = FindValidSpawnPosition(playerSpawnPosition);
+                    // Si no es transitable, buscar una posición cercana válida
+                    playerSpawnPosition = FindValidSpawnPosition(playerSpawnPosition, spawnRoomCenter);
                 }
                 _players[i] = new Player(i, playerSpawnPosition);
                 _players[i].IsActive = (i == 0); // Solo el jugador 0 está activo por defecto
