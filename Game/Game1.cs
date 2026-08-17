@@ -58,37 +58,9 @@ namespace TwinStickShooter
 
         protected override void Initialize()
         {
-            _inputManager = new InputManager();
-            _levelManager = new LevelManager(GameConstants.GridWidth, GameConstants.GridHeight, GameConstants.GridCellSize);
-            _bulletManager = new BulletManager(_levelManager);
-            _particleSystem = new ParticleSystem(GameConstants.MaxParticles);
-            _camera = new Camera();
-            _debugConsole = new DebugConsole();
-
-            // Cargar el mapa de prueba ANTES de crear el renderer
-            // Generar un mapa procedural
-            MapLoader.GenerateProceduralMap(_levelManager);
-
-            // Spawns iniciales en el marcador de spawn del mapa
-            Vector2 spawnPosition = _levelManager.GetSpawnPosition();
-            Vector2[] offsets =
-            {
-                new Vector2(-18, -18), new Vector2(18, -18),
-                new Vector2(-18, 18),  new Vector2(18, 18),
-            };
-
-            for (int i = 0; i < GameConstants.MaxPlayers; i++)
-            {
-                Vector2 playerSpawnPosition = spawnPosition + offsets[i];
-                // Validar que la posición de spawn no esté en una pared
-                if (_levelManager.CheckCollision(playerSpawnPosition, GameConstants.PlayerRadius))
-                {
-                    // Si está en una pared, buscar una posición cercana válida
-                    playerSpawnPosition = FindValidSpawnPosition(playerSpawnPosition);
-                }
-                _players[i] = new Player(i, playerSpawnPosition);
-                _players[i].IsActive = (i == 0); // Solo el jugador 0 está activo por defecto
-            }
+            InitializeManagers();
+            InitializeLevel();
+            InitializePlayers();
 
             // Contar paredes para depuración
             int wallCount = CountWalls();
@@ -366,6 +338,56 @@ namespace TwinStickShooter
             _arenaRenderer.RebuildGeometry();
             int wallCount = CountWalls();
             SetDebugMessage($"Mapa generado: {wallCount} colisiones");
+        }
+
+        /// <summary>
+        /// Inicializa los managers del juego (input, level, bullet, particle, camera, debug).
+        /// </summary>
+        private void InitializeManagers()
+        {
+            _inputManager = new InputManager();
+            _levelManager = new LevelManager(GameConstants.GridWidth, GameConstants.GridHeight, GameConstants.GridCellSize);
+            _bulletManager = new BulletManager(_levelManager);
+            _particleSystem = new ParticleSystem(GameConstants.MaxParticles);
+            _camera = new Camera();
+            _debugConsole = new DebugConsole();
+        }
+
+        /// <summary>
+        /// Carga el nivel procedural y configura la geometría del mapa.
+        /// </summary>
+        private void InitializeLevel()
+        {
+            // Cargar el mapa de prueba ANTES de crear el renderer
+            // Generar un mapa procedural
+            MapLoader.GenerateProceduralMap(_levelManager);
+        }
+
+        /// <summary>
+        /// Inicializa los jugadores en sus posiciones de spawn.
+        /// </summary>
+        private void InitializePlayers()
+        {
+            // Spawns iniciales en el marcador de spawn del mapa
+            Vector2 spawnPosition = _levelManager.GetSpawnPosition();
+            Vector2[] offsets =
+            {
+                new Vector2(-18, -18), new Vector2(18, -18),
+                new Vector2(-18, 18),  new Vector2(18, 18),
+            };
+
+            for (int i = 0; i < GameConstants.MaxPlayers; i++)
+            {
+                Vector2 playerSpawnPosition = spawnPosition + offsets[i];
+                // Validar que la posición de spawn no esté en una pared
+                if (_levelManager.CheckCollision(playerSpawnPosition, GameConstants.PlayerRadius))
+                {
+                    // Si está en una pared, buscar una posición cercana válida
+                    playerSpawnPosition = FindValidSpawnPosition(playerSpawnPosition);
+                }
+                _players[i] = new Player(i, playerSpawnPosition);
+                _players[i].IsActive = (i == 0); // Solo el jugador 0 está activo por defecto
+            }
         }
 
         /// <summary>
