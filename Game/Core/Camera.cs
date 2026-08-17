@@ -46,8 +46,12 @@ namespace TwinStickShooter.Core
             float minY = players.Where(p => p != null).Min(p => p.Position.Y);
             float maxY = players.Where(p => p != null).Max(p => p.Position.Y);
 
+            // Evitar división por cero si todos los jugadores están en la misma posición
             float requiredWidth = (maxX - minX) + (2 * GameConstants.CameraPadding);
             float requiredHeight = (maxY - minY) + (2 * GameConstants.CameraPadding);
+            
+            if (requiredWidth <= 0) requiredWidth = GameConstants.ScreenWidth;
+            if (requiredHeight <= 0) requiredHeight = GameConstants.ScreenHeight;
 
             float zoomX = GameConstants.ScreenWidth / requiredWidth;
             float zoomY = GameConstants.ScreenHeight / requiredHeight;
