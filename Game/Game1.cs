@@ -79,7 +79,14 @@ namespace TwinStickShooter
 
             for (int i = 0; i < GameConstants.MaxPlayers; i++)
             {
-                _players[i] = new Player(i, spawnPosition + offsets[i]);
+                Vector2 playerSpawnPosition = spawnPosition + offsets[i];
+                // Validar que la posición de spawn no esté en una pared
+                if (_levelManager.CheckCollision(playerSpawnPosition, GameConstants.PlayerRadius))
+                {
+                    // Si está en una pared, buscar una posición cercana válida
+                    playerSpawnPosition = FindValidSpawnPosition(playerSpawnPosition);
+                }
+                _players[i] = new Player(i, playerSpawnPosition);
                 _players[i].IsActive = (i == 0); // Solo el jugador 0 está activo por defecto
             }
 
@@ -304,6 +311,32 @@ namespace TwinStickShooter
                 if (particles[i].Active) count++;
             }
             return count;
+        }
+
+        /// <summary>
+        /// Busca una posición válida cerca de la posición original para spawnear un jugador.
+        /// </summary>
+        private Vector2 FindValidSpawnPosition(Vector2 originalPosition)
+        {
+            // Buscar en un radio creciente alrededor de la posición original
+            for (int radius = 1; radius < 20; radius++)
+            {
+                for (int angle = 0; angle < 360; angle += 15)
+                {
+                    float radians = MathHelper.ToRadians(angle);
+                    Vector2 testPosition = originalPosition + new Vector2(
+                        (float)Math.Cos(radians) * radius * GameConstants.GridCellSize,
+                        (float)Math.Sin(radians) * radius * GameConstants.GridCellSize
+                    );
+                    if (!_levelManager.CheckCollision(testPosition, GameConstants.PlayerRadius))
+                    {
+                        return testPosition;
+                    }
+                }
+            }
+            // Si no se encuentra una posición válida, devolver la original (aunque sea inválida)
+            Console.WriteLine("[Game1] ADVERTENCIA: No se encontró una posición válida para spawnear al jugador.");
+            return originalPosition;
         }
 
         /// <summary>

@@ -51,11 +51,13 @@ namespace TwinStickShooter.Core
                 // Almacenar los marcadores de spawn y salida en el LevelManager
                 if (mapData.spawn != null)
                 {
-                    levelManager.SetSpawnPosition(mapData.spawn.x, mapData.spawn.y);
+                    Point spawnPoint = ValidateSpawnPoint(levelManager, mapData.spawn.x, mapData.spawn.y);
+                    levelManager.SetSpawnPosition(spawnPoint.X, spawnPoint.Y);
                 }
                 if (mapData.exit != null)
                 {
-                    levelManager.SetExitPosition(mapData.exit.x, mapData.exit.y);
+                    Point exitPoint = ValidateSpawnPoint(levelManager, mapData.exit.x, mapData.exit.y);
+                    levelManager.SetExitPosition(exitPoint.X, exitPoint.Y);
                 }
             }
             catch (Exception ex)
@@ -88,6 +90,48 @@ namespace TwinStickShooter.Core
         {
             public int x { get; set; }
             public int y { get; set; }
+        }
+
+        /// <summary>
+        /// Valida que la posición de spawn o salida no esté en una celda con colisión.
+        /// Si lo está, busca la celda vacía más cercana.
+        /// </summary>
+        private static Point ValidateSpawnPoint(LevelManager levelManager, int x, int y)
+        {
+            // Verificar si la posición inicial es válida
+            if (x >= 0 && x < GameConstants.GridWidth && y >= 0 && y < GameConstants.GridHeight)
+            {
+                Vector2 testPosition = levelManager.GridToWorld(new Point(x, y));
+                if (!levelManager.CheckCollision(testPosition, 1f))
+                {
+                    return new Point(x, y);
+                }
+            }
+
+            // Si la posición no es válida, buscar la celda vacía más cercana
+            for (int radius = 1; radius < Math.Max(GameConstants.GridWidth, GameConstants.GridHeight); radius++)
+            {
+                for (int i = -radius; i <= radius; i++)
+                {
+                    for (int j = -radius; j <= radius; j++)
+                    {
+                        int newX = x + i;
+                        int newY = y + j;
+                        if (newX >= 0 && newX < GameConstants.GridWidth && newY >= 0 && newY < GameConstants.GridHeight)
+                        {
+                            Vector2 testPosition = levelManager.GridToWorld(new Point(newX, newY));
+                            if (!levelManager.CheckCollision(testPosition, 1f))
+                            {
+                                return new Point(newX, newY);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Si no se encuentra ninguna celda vacía, devolver la posición original (aunque sea inválida)
+            Console.WriteLine("[MapLoader] ADVERTENCIA: No se encontró una celda vacía para spawn/salida. Usando posición original.");
+            return new Point(x, y);
         }
     }
 }
