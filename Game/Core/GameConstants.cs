@@ -40,6 +40,10 @@ namespace TwinStickShooter.Core
         public const float MuzzleParticleLifeSeconds = 0.15f;
         public const float MuzzleParticleSize = 6f;
 
+        // --- Enemigos (Fase 5: IA básica) ---
+        public const int MaxEnemies = 64;
+        public const float EnemyRadius = 12f;
+
         // Colores por índice de jugador (estilo neón).
         public static readonly Color[] PlayerColors =
         {
