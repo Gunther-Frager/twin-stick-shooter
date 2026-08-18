@@ -14,6 +14,7 @@ namespace TwinStickShooter.Core
         private readonly int _cellSize;
         private readonly bool[,] _collisionGrid;
         private MapGenerator _mapGenerator;
+        public MapGenerator MapGenerator => _mapGenerator;
         private Point _spawnPosition;
         private Point _exitPosition;
 
@@ -131,6 +132,11 @@ namespace TwinStickShooter.Core
         {
             Vector2 exitWorldPosition = GridToWorld(_exitPosition);
             return Vector2.Distance(playerPosition, exitWorldPosition) < _cellSize;
+        }
+
+        public void SetRoomTemplates(System.Collections.Generic.List<RoomTemplateData> templates)
+        {
+            _mapGenerator.SetRoomTemplates(templates);
         }
 
         /// <summary>
