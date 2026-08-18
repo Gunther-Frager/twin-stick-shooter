@@ -167,8 +167,8 @@ namespace TwinStickShooter.Core
                     ExitPoint = new Point(_width - 2, _height - 2);
                 }
 
-                // 5. Verificar transitabilidad con BFS
-                if (validSpawn && IsMapTraversable(grid, SpawnPoint, ExitPoint))
+                // 5. Verificar transitabilidad total con BFS (asegurar que todas las salas sean accesibles)
+                if (validSpawn && IsMapFullyTraversable(grid, SpawnPoint, ExitPoint, roomCenters))
                 {
                     return grid;
                 }
@@ -424,6 +424,53 @@ namespace TwinStickShooter.Core
         public bool IsMapTraversable(int[,] grid, Point start, Point end)
         {
             return BFS(grid, start, end);
+        }
+
+        /// <summary>
+        /// Verifica que tanto el punto de salida como todos los centros de las habitaciones 
+        /// sean alcanzables desde el punto de inicio.
+        /// </summary>
+        private bool IsMapFullyTraversable(int[,] grid, Point start, Point end, List<Point> centers)
+        {
+            if (grid[start.X, start.Y] != 0 || grid[end.X, end.Y] != 0)
+                return false;
+
+            HashSet<Point> targets = new HashSet<Point>(centers);
+            targets.Add(end);
+
+            Queue<Point> queue = new Queue<Point>();
+            bool[,] visited = new bool[_width, _height];
+
+            queue.Enqueue(start);
+            visited[start.X, start.Y] = true;
+
+            int[,] directions = { { 0, 1 }, { 1, 0 }, { 0, -1 }, { -1, 0 } };
+
+            while (queue.Count > 0)
+            {
+                Point current = queue.Dequeue();
+
+                if (targets.Contains(current))
+                {
+                    targets.Remove(current);
+                    if (targets.Count == 0) return true;
+                }
+
+                for (int i = 0; i < 4; i++)
+                {
+                    int nx = current.X + directions[i, 0];
+                    int ny = current.Y + directions[i, 1];
+
+                    if (nx >= 0 && nx < _width && ny >= 0 && ny < _height &&
+                        grid[nx, ny] == 0 && !visited[nx, ny])
+                    {
+                        visited[nx, ny] = true;
+                        queue.Enqueue(new Point(nx, ny));
+                    }
+                }
+            }
+
+            return targets.Count == 0;
         }
 
         private bool BFS(int[,] grid, Point start, Point end)
