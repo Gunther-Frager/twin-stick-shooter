@@ -362,6 +362,9 @@ namespace TwinStickShooter
             // Cargar plantillas de sala para uso futuro
             _roomTemplates = RoomTemplateLoader.LoadAll(Content);
             Console.WriteLine($"[Game1] Plantillas de sala cargadas: {_roomTemplates.Count}");
+            
+            // Inyectar plantillas en el generador de mapas
+            _levelManager.SetRoomTemplates(_roomTemplates);
         }
 
         /// <summary>
@@ -372,6 +375,7 @@ namespace TwinStickShooter
             // Cargar el mapa de prueba ANTES de crear el renderer
             // Generar un mapa procedural
             MapLoader.GenerateProceduralMap(_levelManager);
+            Console.WriteLine($"[Game1] Puntos de spawn de enemigos en salas: {_levelManager.MapGenerator.RoomEnemySpawnPoints.Count}");
             SpawnTestEnemies();
         }
 

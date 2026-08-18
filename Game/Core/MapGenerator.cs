@@ -15,9 +15,11 @@ namespace TwinStickShooter.Core
         private readonly int _height;
         private readonly int _cellSize;
         private readonly Random _random;
+        private List<RoomTemplateData> _roomTemplates = new List<RoomTemplateData>();
 
         public Point SpawnPoint { get; private set; }
         public Point ExitPoint { get; private set; }
+        public List<Vector2> RoomEnemySpawnPoints { get; } = new List<Vector2>();
 
         public MapGenerator(int width, int height, int cellSize)
         {
@@ -25,6 +27,11 @@ namespace TwinStickShooter.Core
             _height = height;
             _cellSize = cellSize;
             _random = new Random();
+        }
+
+        public void SetRoomTemplates(List<RoomTemplateData> templates)
+        {
+            _roomTemplates = templates ?? new List<RoomTemplateData>();
         }
 
         private class Edge : IComparable<Edge>
@@ -87,6 +94,7 @@ namespace TwinStickShooter.Core
 
         public int[,] GenerateMap()
         {
+            RoomEnemySpawnPoints.Clear();
             int[,] grid = new int[_width, _height];
 
             for (int attempt = 0; attempt < GameConstants.MaxGenerationAttempts; attempt++)
@@ -235,10 +243,44 @@ namespace TwinStickShooter.Core
                             }
                         }
 
-                        // Agregar islas solo en habitaciones grandes y no en la de spawn
-                        if (i > 0 && roomWidth >= GameConstants.IslandMinRoomSize && roomHeight >= GameConstants.IslandMinRoomSize)
+                        RoomTemplateData template = null;
+                        if (i > 0)
                         {
-                            AddIslandsToRoom(grid, newRoom);
+                            template = SelectTemplate(newRoom);
+                        }
+
+                        if (template != null)
+                        {
+                            for (int localX = 0; localX < roomWidth; localX++)
+                            {
+                                for (int localY = 0; localY < roomHeight; localY++)
+                                {
+                                    if (template.TryGetCell(localX, localY, out bool isWall))
+                                    {
+                                        int gx = roomX + localX;
+                                        int gy = roomY + localY;
+                                        if (gx >= 0 && gx < _width && gy >= 0 && gy < _height)
+                                        {
+                                            grid[gx, gy] = isWall ? 1 : 0;
+                                        }
+                                    }
+                                }
+                            }
+
+                            foreach (var p in template.EnemySpawns)
+                            {
+                                float worldX = (roomX + p.X) * _cellSize + _cellSize / 2f;
+                                float worldY = (roomY + p.Y) * _cellSize + _cellSize / 2f;
+                                RoomEnemySpawnPoints.Add(new Vector2(worldX, worldY));
+                            }
+                        }
+                        else
+                        {
+                            // Agregar islas solo en habitaciones grandes y no en la de spawn
+                            if (i > 0 && roomWidth >= GameConstants.IslandMinRoomSize && roomHeight >= GameConstants.IslandMinRoomSize)
+                            {
+                                AddIslandsToRoom(grid, newRoom);
+                            }
                         }
 
                         rooms.Add(newRoom);
@@ -249,6 +291,27 @@ namespace TwinStickShooter.Core
             }
 
             return rooms;
+        }
+
+
+
+        private RoomTemplateData SelectTemplate(Rectangle room)
+        {
+            if (!GameConstants.UseRoomTemplates || _roomTemplates == null || _roomTemplates.Count == 0)
+            {
+                return null;
+            }
+
+            var matchingTemplates = _roomTemplates.Where(t =>
+                room.Width >= t.MinSize && room.Width <= t.MaxSize &&
+                room.Height >= t.MinSize && room.Height <= t.MaxSize).ToList();
+
+            if (matchingTemplates.Count == 0)
+            {
+                return null;
+            }
+
+            return matchingTemplates[_random.Next(matchingTemplates.Count)];
         }
 
         private void AddIslandsToRoom(int[,] grid, Rectangle room)
