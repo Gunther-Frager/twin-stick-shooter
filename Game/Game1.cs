@@ -384,32 +384,90 @@ namespace TwinStickShooter
         /// </summary>
         private void SpawnTestEnemies()
         {
-            // Spawnear 1-2 enemigos en posiciones fijas dentro del mapa
-            Vector2 spawnPosition = _levelManager.GetSpawnPosition();
-            Console.WriteLine($"[Game1] SpawnPosition: {spawnPosition}");
-            Vector2[] enemyPositions = 
+            if (!GameConstants.UseRoomTemplates)
             {
-                spawnPosition + new Vector2(50, 50),
-                spawnPosition + new Vector2(100, 100)
-            };
+                // Comportamiento original (hardcodeado)
+                Vector2 spawnPosition = _levelManager.GetSpawnPosition();
+                Console.WriteLine($"[Game1] SpawnPosition: {spawnPosition}");
+                Vector2[] enemyPositions = 
+                {
+                    spawnPosition + new Vector2(50, 50),
+                    spawnPosition + new Vector2(100, 100)
+                };
 
-            for (int i = 0; i < 2; i++)
-            {
-                Vector2 position = enemyPositions[i];
-                Console.WriteLine($"[Game1] Intentando spawnear enemigo {i} en posición: {position}");
-                // Validar que la posición sea transitable
-                if (_levelManager.IsWalkable(position, GameConstants.EnemyRadius))
+                for (int i = 0; i < 2; i++)
                 {
-                    Console.WriteLine($"[Game1] Posición válida para enemigo {i}. Spawneando...");
-                    _enemyManager.Spawn(position, new Vector2(10f, 10f));
+                    Vector2 position = enemyPositions[i];
+                    Console.WriteLine($"[Game1] Intentando spawnear enemigo {i} en posición: {position}");
+                    if (_levelManager.IsWalkable(position, GameConstants.EnemyRadius))
+                    {
+                        Console.WriteLine($"[Game1] Posición válida para enemigo {i}. Spawneando...");
+                        _enemyManager.Spawn(position, new Vector2(10f, 10f));
+                    }
+                    else
+                    {
+                        Console.WriteLine($"[Game1] ADVERTENCIA: Posición no válida para enemigo {i}. Buscando alternativa...");
+                        Vector2 alternativePosition = FindValidSpawnPosition(position, spawnPosition);
+                        Console.WriteLine($"[Game1] Posición alternativa para enemigo {i}: {alternativePosition}");
+                        _enemyManager.Spawn(alternativePosition, new Vector2(10f, 10f));
+                    }
                 }
-                else
+                return;
+            }
+
+            // Nuevo comportamiento basado en RoomEnemySpawnPoints y salas
+            Console.WriteLine("[Game1] Spawneando enemigos usando plantillas de salas y reglas generales...");
+            
+            // 1. Iterar los puntos de spawn reales de las plantillas (RoomEnemySpawnPoints)
+            if (_levelManager.MapGenerator.RoomEnemySpawnPoints != null && _levelManager.MapGenerator.RoomEnemySpawnPoints.Count > 0)
+            {
+                foreach (var spawnPoint in _levelManager.MapGenerator.RoomEnemySpawnPoints)
                 {
-                    Console.WriteLine($"[Game1] ADVERTENCIA: Posición no válida para enemigo {i}. Buscando alternativa...");
-                    // Buscar una posición alternativa cercana
-                    Vector2 alternativePosition = FindValidSpawnPosition(position, spawnPosition);
-                    Console.WriteLine($"[Game1] Posición alternativa para enemigo {i}: {alternativePosition}");
-                    _enemyManager.Spawn(alternativePosition, new Vector2(10f, 10f));
+                    Vector2 worldPos = new Vector2(spawnPoint.X, spawnPoint.Y);
+                    if (_levelManager.IsWalkable(worldPos, GameConstants.EnemyRadius))
+                    {
+                        _enemyManager.Spawn(worldPos, new Vector2(10f, 10f));
+                        Console.WriteLine($"[Game1] Enemigo spawneado en RoomEnemySpawnPoint: {worldPos}");
+                    }
+                    else
+                    {
+                        Vector2 validPos = FindValidSpawnPosition(worldPos, _levelManager.GetSpawnPosition());
+                        _enemyManager.Spawn(validPos, new Vector2(10f, 10f));
+                        Console.WriteLine($"[Game1] Enemigo spawneado en fallback para RoomEnemySpawnPoint: {validPos}");
+                    }
+                }
+            }
+
+            // 2. Regla para el resto (salas sin plantilla):
+            // 1 enemigo cada N celdas² de área de sala, colocado en un punto random walkable dentro del Rectangle de la sala.
+            if (_levelManager.MapGenerator.Rooms != null)
+            {
+                Random rand = new Random(42);
+                foreach (var room in _levelManager.MapGenerator.Rooms)
+                {
+                    int area = room.Width * room.Height;
+                    if (area <= 0) continue;
+
+                    int enemyCount = area / 300;
+                    if (enemyCount < 1 && area > 150) enemyCount = 1;
+
+                    for (int c = 0; c < enemyCount; c++)
+                    {
+                        for (int attempt = 0; attempt < 10; attempt++)
+                        {
+                            int rx = rand.Next(room.X + 1, room.X + room.Width - 1);
+                            int ry = rand.Next(room.Y + 1, room.Y + room.Height - 1);
+                            
+                            Vector2 worldPos = _levelManager.GridToWorld(new Point(rx, ry));
+                            
+                            if (_levelManager.IsWalkable(worldPos, GameConstants.EnemyRadius))
+                            {
+                                _enemyManager.Spawn(worldPos, new Vector2(10f, 10f));
+                                Console.WriteLine($"[Game1] Enemigo spawneado por regla general en sala ({room.X},{room.Y}): {worldPos}");
+                                break;
+                            }
+                        }
+                    }
                 }
             }
         }

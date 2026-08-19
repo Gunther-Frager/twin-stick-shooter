@@ -20,6 +20,7 @@ namespace TwinStickShooter.Core
         public Point SpawnPoint { get; private set; }
         public Point ExitPoint { get; private set; }
         public List<Vector2> RoomEnemySpawnPoints { get; } = new List<Vector2>();
+        public List<Rectangle> Rooms { get; private set; } = new List<Rectangle>();
 
         public MapGenerator(int width, int height, int cellSize)
         {
@@ -181,6 +182,7 @@ namespace TwinStickShooter.Core
         private List<Rectangle> GenerateRooms(int[,] grid)
         {
             List<Rectangle> rooms = new List<Rectangle>();
+            Rooms.Clear();
             int roomCount = _random.Next(GameConstants.MinRoomCount, GameConstants.MaxRoomCount); // Más habitaciones para mayor complejidad
 
             for (int i = 0; i < roomCount; i++)
@@ -284,6 +286,7 @@ namespace TwinStickShooter.Core
                         }
 
                         rooms.Add(newRoom);
+                        Rooms.Add(newRoom);
                         placed = true;
                         break;
                     }
