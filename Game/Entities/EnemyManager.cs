@@ -23,6 +23,24 @@ namespace TwinStickShooter.Entities
         /// <summary>Array fijo de enemigos (activas e inactivas); usado por el renderer.</summary>
         public Enemy[] Enemies => _pool.Items;
 
+        /// <summary>Cantidad de enemigos activos actualmente.</summary>
+        public int ActiveCount
+        {
+            get
+            {
+                int count = 0;
+                Enemy[] items = _pool.Items;
+                for (int i = 0; i < items.Length; i++)
+                {
+                    if (items[i].Active)
+                    {
+                        count++;
+                    }
+                }
+                return count;
+            }
+        }
+
         public void Spawn(Vector2 position, Vector2 velocity)
         {
             if (!_pool.TryAcquire(out int index, out Enemy enemy))

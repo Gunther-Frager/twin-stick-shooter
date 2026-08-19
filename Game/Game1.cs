@@ -421,9 +421,16 @@ namespace TwinStickShooter
             // 1. Iterar los puntos de spawn reales de las plantillas (RoomEnemySpawnPoints)
             if (_levelManager.MapGenerator.RoomEnemySpawnPoints != null && _levelManager.MapGenerator.RoomEnemySpawnPoints.Count > 0)
             {
-                foreach (var spawnPoint in _levelManager.MapGenerator.RoomEnemySpawnPoints)
+                var spawnPoints = _levelManager.MapGenerator.RoomEnemySpawnPoints;
+                for (int i = 0; i < spawnPoints.Count; i++)
                 {
-                    Vector2 worldPos = new Vector2(spawnPoint.X, spawnPoint.Y);
+                    if (_enemyManager.ActiveCount >= GameConstants.MaxEnemies)
+                    {
+                        Console.WriteLine($"[Game1] Límite MaxEnemies alcanzado. Se omitieron {spawnPoints.Count - i} spawns de plantillas.");
+                        goto EndSpawning;
+                    }
+
+                    Vector2 worldPos = spawnPoints[i];
                     if (_levelManager.IsWalkable(worldPos, GameConstants.EnemyRadius))
                     {
                         _enemyManager.Spawn(worldPos, new Vector2(10f, 10f));
@@ -443,8 +450,10 @@ namespace TwinStickShooter
             if (_levelManager.MapGenerator.Rooms != null)
             {
                 Random rand = new Random(42);
-                foreach (var room in _levelManager.MapGenerator.Rooms)
+                var rooms = _levelManager.MapGenerator.Rooms;
+                for (int i = 0; i < rooms.Count; i++)
                 {
+                    var room = rooms[i];
                     int area = room.Width * room.Height;
                     if (area <= 0) continue;
 
@@ -453,6 +462,22 @@ namespace TwinStickShooter
 
                     for (int c = 0; c < enemyCount; c++)
                     {
+                        if (_enemyManager.ActiveCount >= GameConstants.MaxEnemies)
+                        {
+                            int remainingInRoom = enemyCount - c;
+                            int remainingInOtherRooms = 0;
+                            for (int j = i + 1; j < rooms.Count; j++)
+                            {
+                                int a = rooms[j].Width * rooms[j].Height;
+                                if (a <= 0) continue;
+                                int ec = a / 300;
+                                if (ec < 1 && a > 150) ec = 1;
+                                remainingInOtherRooms += ec;
+                            }
+                            Console.WriteLine($"[Game1] Límite MaxEnemies alcanzado. Se omitieron {remainingInRoom + remainingInOtherRooms} spawns de regla de área.");
+                            goto EndSpawning;
+                        }
+
                         for (int attempt = 0; attempt < 10; attempt++)
                         {
                             int rx = rand.Next(room.X + 1, room.X + room.Width - 1);
@@ -462,14 +487,35 @@ namespace TwinStickShooter
                             
                             if (_levelManager.IsWalkable(worldPos, GameConstants.EnemyRadius))
                             {
-                                _enemyManager.Spawn(worldPos, new Vector2(10f, 10f));
-                                Console.WriteLine($"[Game1] Enemigo spawneado por regla general en sala ({room.X},{room.Y}): {worldPos}");
-                                break;
+                                // Tarea 2: Verificar distancia a RoomEnemySpawnPoints
+                                bool tooClose = false;
+                                if (_levelManager.MapGenerator.RoomEnemySpawnPoints != null)
+                                {
+                                    float minDistanceSq = (GameConstants.EnemyRadius * 3) * (GameConstants.EnemyRadius * 3);
+                                    foreach (var sp in _levelManager.MapGenerator.RoomEnemySpawnPoints)
+                                    {
+                                        if (Vector2.DistanceSquared(worldPos, sp) < minDistanceSq)
+                                        {
+                                            tooClose = true;
+                                            break;
+                                        }
+                                    }
+                                }
+
+                                if (!tooClose)
+                                {
+                                    _enemyManager.Spawn(worldPos, new Vector2(10f, 10f));
+                                    Console.WriteLine($"[Game1] Enemigo spawneado por regla general en sala ({room.X},{room.Y}): {worldPos}");
+                                    break;
+                                }
                             }
                         }
                     }
                 }
             }
+
+        EndSpawning:
+            Console.WriteLine($"[Game1] Spawn total: {_enemyManager.ActiveCount}/{GameConstants.MaxEnemies}");
         }
 
         /// <summary>
