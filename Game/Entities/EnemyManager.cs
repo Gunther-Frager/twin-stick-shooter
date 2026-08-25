@@ -70,7 +70,10 @@ namespace TwinStickShooter.Entities
                 activeEnemies++;
                 Console.WriteLine($"[EnemyManager] Enemigo activo en posición: {enemy.Position}");
 
-                enemy.Position += enemy.Velocity * deltaTime;
+                enemy.Position = PhysicsHelper.MoveWithCollision(
+                    enemy,
+                    enemy.Velocity * deltaTime,
+                    _levelManager);
 
                 bool offWorld =
                     enemy.Position.X < -enemy.Radius ||
@@ -78,13 +81,11 @@ namespace TwinStickShooter.Entities
                     enemy.Position.Y < -enemy.Radius ||
                     enemy.Position.Y > GameConstants.WorldHeight + enemy.Radius;
 
-                bool hitWall = _levelManager.CheckCollision(enemy.Position, enemy.Radius);
-
-                if (offWorld || hitWall)
+                if (offWorld)
                 {
                     enemy.Active = false;
                     _pool.Release(enemy.PoolIndex);
-                    Console.WriteLine($"[EnemyManager] Enemigo desactivado por colisión o fuera del mundo.");
+                    Console.WriteLine($"[EnemyManager] Enemigo desactivado por salir del mundo.");
                 }
             }
             Console.WriteLine($"[EnemyManager] Enemigos activos: {activeEnemies}");
