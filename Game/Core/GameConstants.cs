@@ -44,6 +44,21 @@ namespace TwinStickShooter.Core
         public const int MaxEnemies = 64;
         public const float EnemyRadius = 12f;
 
+        // --- Tipos de enemigos ---
+        public const float SwarmerSpeed = 90f;
+        public const float SwarmerHealth = 1f;
+        public const float RoamerSpeed = 160f;
+        public const float RoamerHealth = 1f;
+        public const float RoamerDirectionChangeMinSeconds = 0.8f;
+        public const float RoamerDirectionChangeMaxSeconds = 2.0f;
+        public const float TurretHealth = 3f;
+        public const float TurretDetectionRange = 350f;
+        public const float TurretShootCooldown = 1.1f;
+        public const float TurretBulletSpeed = 300f;
+        public const float SpawnerHealth = 5f;
+        public const float SpawnerInterval = 3.5f;
+        public const int SpawnerMaxConcurrentChildren = 6;
+
         // Colores por índice de jugador (estilo neón).
         public static readonly Color[] PlayerColors =
         {
