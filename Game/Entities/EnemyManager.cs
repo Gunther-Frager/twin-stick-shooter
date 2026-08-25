@@ -70,25 +70,41 @@ namespace TwinStickShooter.Entities
                 activeEnemies++;
                 Console.WriteLine($"[EnemyManager] Enemigo activo en posición: {enemy.Position}");
 
-                enemy.Position = PhysicsHelper.MoveWithCollision(
-                    enemy,
-                    enemy.Velocity * deltaTime,
-                    _levelManager);
-
-                bool offWorld =
-                    enemy.Position.X < -enemy.Radius ||
-                    enemy.Position.X > GameConstants.WorldWidth + enemy.Radius ||
-                    enemy.Position.Y < -enemy.Radius ||
-                    enemy.Position.Y > GameConstants.WorldHeight + enemy.Radius;
-
-                if (offWorld)
+                switch (enemy.Type)
                 {
-                    enemy.Active = false;
-                    _pool.Release(enemy.PoolIndex);
-                    Console.WriteLine($"[EnemyManager] Enemigo desactivado por salir del mundo.");
+                    case Core.EnemyType.Swarmer:
+                        UpdateSwarmer(enemy, deltaTime);
+                        break;
+                    case Core.EnemyType.Roamer:
+                    case Core.EnemyType.Turret:
+                    case Core.EnemyType.Spawner:
+                        // Aún no implementados — se agregan en etapas siguientes.
+                        break;
                 }
             }
             Console.WriteLine($"[EnemyManager] Enemigos activos: {activeEnemies}");
+        }
+
+        /// <summary>Actualiza el movimiento y ciclo de vida de un Swarmer.</summary>
+        private void UpdateSwarmer(Enemy enemy, float deltaTime)
+        {
+            enemy.Position = PhysicsHelper.MoveWithCollision(
+                enemy,
+                enemy.Velocity * deltaTime,
+                _levelManager);
+
+            bool offWorld =
+                enemy.Position.X < -enemy.Radius ||
+                enemy.Position.X > GameConstants.WorldWidth + enemy.Radius ||
+                enemy.Position.Y < -enemy.Radius ||
+                enemy.Position.Y > GameConstants.WorldHeight + enemy.Radius;
+
+            if (offWorld)
+            {
+                enemy.Active = false;
+                _pool.Release(enemy.PoolIndex);
+                Console.WriteLine($"[EnemyManager] Enemigo desactivado por salir del mundo.");
+            }
         }
     }
 }
