@@ -39,6 +39,20 @@ namespace TwinStickShooter.Core
             }
         }
 
+        public void ConfigureCombatTestArena()
+        {
+            for (int x = 0; x < _gridWidth; x++)
+            {
+                for (int y = 0; y < _gridHeight; y++)
+                {
+                    _collisionGrid[x, y] = x == 0 || y == 0 || x == _gridWidth - 1 || y == _gridHeight - 1;
+                }
+            }
+
+            SetSpawnPosition(_gridWidth / 2, _gridHeight / 2);
+            SetExitPosition(_gridWidth - 2, _gridHeight - 2);
+        }
+
         /// <summary>
         /// Verifica si una posición en el mundo colisiona con la grilla.
         /// </summary>

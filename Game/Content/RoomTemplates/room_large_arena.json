@@ -14,9 +14,9 @@
     "111111111"
   ],
   "enemySpawns": [
-    { "x": 4, "y": 1 },
-    { "x": 4, "y": 7 },
-    { "x": 1, "y": 4 },
-    { "x": 7, "y": 4 }
+    { "x": 4, "y": 1, "type": "Turret" },
+    { "x": 4, "y": 7, "type": "Roamer" },
+    { "x": 1, "y": 4, "type": "Swarmer" },
+    { "x": 7, "y": 4, "type": "Spawner" }
   ]
 }

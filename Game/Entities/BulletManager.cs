@@ -40,7 +40,7 @@ namespace TwinStickShooter.Entities
             bullet.Color = color;
         }
 
-        public void Update(float deltaTime, Enemy[] enemies)
+        public void Update(float deltaTime, EnemyManager enemyManager, SpawnerManager spawnerManager)
         {
             Bullet[] items = _pool.Items;
 
@@ -63,26 +63,24 @@ namespace TwinStickShooter.Entities
 
                 bool hitWall = _levelManager.CheckCollision(bullet.Position, bullet.Radius);
 
-                // Verificar colisión con enemigos
-                bool hitEnemy = false;
-                for (int j = 0; j < enemies.Length; j++)
+                int spawnerIndex = spawnerManager.FindHit(bullet.Position, bullet.Radius);
+                bool hitTarget = false;
+                if (spawnerIndex >= 0)
                 {
-                    Enemy enemy = enemies[j];
-                    if (!enemy.Active)
+                    spawnerManager.ApplyDamage(spawnerIndex, 1f);
+                    hitTarget = true;
+                }
+                else
+                {
+                    int enemyIndex = enemyManager.FindHit(bullet.Position, bullet.Radius);
+                    if (enemyIndex >= 0)
                     {
-                        continue;
-                    }
-
-                    float distance = Vector2.Distance(bullet.Position, enemy.Position);
-                    if (distance < bullet.Radius + enemy.Radius)
-                    {
-                        hitEnemy = true;
-                        enemy.Active = false;
-                        break;
+                        enemyManager.ApplyDamage(enemyIndex, 1f);
+                        hitTarget = true;
                     }
                 }
 
-                if (bullet.LifeRemaining <= 0f || offWorld || hitWall || hitEnemy)
+                if (bullet.LifeRemaining <= 0f || offWorld || hitWall || hitTarget)
                 {
                     bullet.Active = false;
                     _pool.Release(bullet.PoolIndex);

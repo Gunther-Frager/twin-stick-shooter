@@ -14,6 +14,19 @@ namespace TwinStickShooter.Core
         public int MaxSize { get; set; }
         public string[] Grid { get; set; }
         public List<Point> EnemySpawns { get; set; }
+        public List<EnemySpawn> TypedEnemySpawns { get; set; }
+
+        public readonly struct EnemySpawn
+        {
+            public EnemySpawn(Point position, EnemyType type)
+            {
+                Position = position;
+                Type = type;
+            }
+
+            public Point Position { get; }
+            public EnemyType Type { get; }
+        }
 
         /// <summary>
         /// Intenta obtener si una celda específica de la grilla es una pared.
@@ -48,6 +61,7 @@ namespace TwinStickShooter.Core
         {
             public int x { get; set; }
             public int y { get; set; }
+            public string type { get; set; }
         }
 
         /// <summary>
@@ -56,12 +70,27 @@ namespace TwinStickShooter.Core
         internal void MapEnemySpawns(List<EnemySpawnData> data)
         {
             EnemySpawns = new List<Point>();
+            TypedEnemySpawns = new List<EnemySpawn>();
             if (data == null) return;
 
             foreach (var spawn in data)
             {
-                EnemySpawns.Add(new Point(spawn.x, spawn.y));
+                Point position = new Point(spawn.x, spawn.y);
+                EnemyType type = ParseEnemyType(spawn.type);
+                EnemySpawns.Add(position);
+                TypedEnemySpawns.Add(new EnemySpawn(position, type));
             }
+        }
+
+        private static EnemyType ParseEnemyType(string value)
+        {
+            if (Enum.TryParse(value, true, out EnemyType type) &&
+                Enum.IsDefined(typeof(EnemyType), type))
+            {
+                return type;
+            }
+
+            return EnemyType.Swarmer;
         }
     }
 }

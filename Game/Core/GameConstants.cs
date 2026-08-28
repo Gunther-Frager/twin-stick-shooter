@@ -46,6 +46,9 @@ namespace TwinStickShooter.Core
 
         // --- Enemigos (Fase 5: IA básica) ---
         public const int MaxEnemies = 64;
+        public const int MaxSpawners = 16;
+        public const bool StartInCombatTestScene = false;
+        public const bool EnableDebugHotkeys = true;
         public const float EnemyRadius = 12f;
 
         // --- Tipos de enemigos ---
@@ -62,6 +65,8 @@ namespace TwinStickShooter.Core
         public const float SpawnerHealth = 5f;
         public const float SpawnerInterval = 3.5f;
         public const int SpawnerMaxConcurrentChildren = 6;
+        public const float SpawnerRadius = 20f;
+        public const float SpawnerChildRadius = 180f;
 
         // Colores por índice de jugador (estilo neón).
         public static readonly Color[] PlayerColors =

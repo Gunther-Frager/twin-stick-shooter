@@ -43,11 +43,23 @@ namespace TwinStickShooter.Entities
             }
         }
 
-        public void Spawn(Vector2 position, Vector2 velocity, EnemyType type = EnemyType.Swarmer)
+        public void Clear()
+        {
+            for (int i = 0; i < _pool.Items.Length; i++)
+            {
+                if (_pool.Items[i].Active)
+                {
+                    _pool.Items[i].Active = false;
+                    _pool.Release(_pool.Items[i].PoolIndex);
+                }
+            }
+        }
+
+        public bool Spawn(Vector2 position, Vector2 velocity, EnemyType type = EnemyType.Swarmer)
         {
             if (!_pool.TryAcquire(out int index, out Enemy enemy))
             {
-                return; // pool lleno: se descarta el spawn en vez de alocar de más
+            return false; // pool lleno: se descarta el spawn en vez de alocar de más
             }
 
             enemy.PoolIndex = index;
@@ -69,6 +81,61 @@ namespace TwinStickShooter.Entities
                 enemy.ShootCooldown = GameConstants.TurretShootCooldown;
                 enemy.ShootTimer = 0f;
             }
+
+            return true;
+        }
+
+        public int CountNear(Vector2 position, float radius)
+        {
+            float radiusSquared = radius * radius;
+            int count = 0;
+            for (int i = 0; i < _pool.Items.Length; i++)
+            {
+                Enemy enemy = _pool.Items[i];
+                if (enemy.Active && Vector2.DistanceSquared(position, enemy.Position) <= radiusSquared)
+                {
+                    count++;
+                }
+            }
+            return count;
+        }
+
+        public bool ApplyDamage(int index, float amount)
+        {
+            if (index < 0 || index >= _pool.Items.Length || amount <= 0f)
+            {
+                return false;
+            }
+
+            Enemy enemy = _pool.Items[index];
+            if (!enemy.Active)
+            {
+                return false;
+            }
+
+            enemy.Health -= amount;
+            if (enemy.Health <= 0f)
+            {
+                enemy.Active = false;
+                _pool.Release(enemy.PoolIndex);
+            }
+
+            return true;
+        }
+
+        public int FindHit(Vector2 position, float radius)
+        {
+            for (int i = 0; i < _pool.Items.Length; i++)
+            {
+                Enemy enemy = _pool.Items[i];
+                if (enemy.Active &&
+                    Vector2.Distance(position, enemy.Position) < radius + enemy.Radius)
+                {
+                    return i;
+                }
+            }
+
+            return -1;
         }
 
         public void Update(float deltaTime, Player[] players, EnemyBulletManager enemyBullets)
@@ -84,7 +151,6 @@ namespace TwinStickShooter.Entities
                     continue;
                 }
                 activeEnemies++;
-                Console.WriteLine($"[EnemyManager] Enemigo activo en posición: {enemy.Position}");
 
                 switch (enemy.Type)
                 {
@@ -102,7 +168,6 @@ namespace TwinStickShooter.Entities
                         break;
                 }
             }
-            Console.WriteLine($"[EnemyManager] Enemigos activos: {activeEnemies}");
         }
 
         private Player FindNearestActivePlayer(Vector2 position, Player[] players)
@@ -157,7 +222,6 @@ namespace TwinStickShooter.Entities
 
             float angle = (float)Math.Atan2(direction.Y, direction.X);
             enemyBullets.Spawn(enemy.Position, angle, enemy.Color);
-            Console.WriteLine($"[EnemyManager] Turret dispara hacia jugador {target.Index}.");
         }
 
         /// <summary>Actualiza el movimiento y ciclo de vida de un Swarmer.</summary>

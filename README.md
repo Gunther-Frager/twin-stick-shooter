@@ -70,3 +70,15 @@ dotnet run
 - `ParticleSystem` con buffers pre-alocados.
 - Mover el spawn de jugadores fuera de `Game1.Initialize` hacia un futuro
   `LevelManager` (Fase 4).
+
+## Escena instrumental de combate
+
+La etapa 5 conserva el tipo de cada punto de `enemySpawns` mediante el campo
+opcional `type`: `Swarmer`, `Roamer`, `Turret` o `Spawner`. Si el campo falta o
+no es válido, se usa `Swarmer`.
+
+Para probar el combate sin generación procedural, cambia
+`GameConstants.StartInCombatTestScene` a `true`. La escena configura una gran sala
+abierta con los tipos principales. Durante la ejecución, `F3` reinicia la
+escena. Los spawners son estructuras independientes del pool de enemigos,
+generan swarmers respetando sus límites y dejan de generar al destruirse.

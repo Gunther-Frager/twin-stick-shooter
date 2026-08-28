@@ -20,6 +20,7 @@ namespace TwinStickShooter.Core
         public Point SpawnPoint { get; private set; }
         public Point ExitPoint { get; private set; }
         public List<Vector2> RoomEnemySpawnPoints { get; } = new List<Vector2>();
+        public List<RoomTemplateData.EnemySpawn> RoomEnemySpawns { get; } = new List<RoomTemplateData.EnemySpawn>();
         public List<Rectangle> Rooms { get; private set; } = new List<Rectangle>();
 
         public MapGenerator(int width, int height, int cellSize)
@@ -96,6 +97,7 @@ namespace TwinStickShooter.Core
         public int[,] GenerateMap()
         {
             RoomEnemySpawnPoints.Clear();
+            RoomEnemySpawns.Clear();
             int[,] grid = new int[_width, _height];
 
             for (int attempt = 0; attempt < GameConstants.MaxGenerationAttempts; attempt++)
@@ -269,10 +271,12 @@ namespace TwinStickShooter.Core
                                 }
                             }
 
-                            foreach (var p in template.EnemySpawns)
+                            foreach (var spawn in template.TypedEnemySpawns)
                             {
-                                float worldX = (roomX + p.X) * _cellSize + _cellSize / 2f;
-                                float worldY = (roomY + p.Y) * _cellSize + _cellSize / 2f;
+                                float worldX = (roomX + spawn.Position.X) * _cellSize + _cellSize / 2f;
+                                float worldY = (roomY + spawn.Position.Y) * _cellSize + _cellSize / 2f;
+                                RoomEnemySpawns.Add(new RoomTemplateData.EnemySpawn(
+                                    new Point((int)worldX, (int)worldY), spawn.Type));
                                 RoomEnemySpawnPoints.Add(new Vector2(worldX, worldY));
                             }
                         }
