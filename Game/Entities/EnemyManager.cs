@@ -56,6 +56,12 @@ namespace TwinStickShooter.Entities
             enemy.Velocity = velocity;
             enemy.Radius = GameConstants.EnemyRadius;
             enemy.Color = Color.Red;
+
+            if (type == EnemyType.Roamer)
+            {
+                enemy.RoamDirection = Vector2.UnitX;
+                enemy.RoamChangeTimer = 0f;
+            }
         }
 
         public void Update(float deltaTime)

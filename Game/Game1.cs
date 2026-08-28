@@ -290,29 +290,61 @@ namespace TwinStickShooter
         }
 
         /// <summary>
-        /// Busca una posición válida cerca de la posición original para spawnear un jugador.
+        /// Busca una posición válida cerca de la posición original para spawnear entidades.
         /// </summary>
-        private Vector2 FindValidSpawnPosition(Vector2 originalPosition, Vector2 spawnRoomCenter)
+        private Vector2 FindValidSpawnPosition(Vector2 originalPosition, Vector2 spawnRoomCenter, float radius = GameConstants.PlayerRadius)
         {
             // Buscar en un radio creciente alrededor de la posición original
-            for (int radius = 1; radius < 20; radius++)
+            for (int searchRadius = 1; searchRadius < 20; searchRadius++)
             {
                 for (int angle = 0; angle < 360; angle += 15)
                 {
                     float radians = MathHelper.ToRadians(angle);
                     Vector2 testPosition = originalPosition + new Vector2(
-                        (float)Math.Cos(radians) * radius * GameConstants.GridCellSize,
-                        (float)Math.Sin(radians) * radius * GameConstants.GridCellSize
+                        (float)Math.Cos(radians) * searchRadius * GameConstants.GridCellSize,
+                        (float)Math.Sin(radians) * searchRadius * GameConstants.GridCellSize
                     );
-                    if (_levelManager.IsWalkable(testPosition, GameConstants.PlayerRadius))
+                    if (_levelManager.IsWalkable(testPosition, radius))
                     {
                         return testPosition;
                     }
                 }
             }
             // Si no se encuentra una posición válida, hacer clamp hacia el centro de la sala de spawn
-            Console.WriteLine("[Game1] ADVERTENCIA: No se encontró una posición válida para spawnear al jugador. Haciendo clamp al centro de la sala.");
+            Console.WriteLine("[Game1] ADVERTENCIA: No se encontró una posición válida para spawnear. Haciendo clamp al centro de la sala.");
             return spawnRoomCenter;
+        }
+
+        /// <summary>
+        /// Spawnea enemigos de prueba de tipos configurables alrededor de un punto base.
+        /// Sirve para validar comportamientos sin sobre-diseñar la infraestructura.
+        /// </summary>
+        private void SpawnDebugEnemies(SpawnSpec[] specs, Vector2 basePosition)
+        {
+            foreach (SpawnSpec spec in specs)
+            {
+                Vector2 candidate = basePosition + spec.Offset;
+                Vector2 safePosition = _levelManager.IsWalkable(candidate, GameConstants.EnemyRadius)
+                    ? candidate
+                    : FindValidSpawnPosition(candidate, basePosition, GameConstants.EnemyRadius);
+
+                if (_levelManager.IsWalkable(safePosition, GameConstants.EnemyRadius))
+                {
+                    _enemyManager.Spawn(safePosition, Vector2.Zero, spec.Type);
+                }
+            }
+        }
+
+        private readonly struct SpawnSpec
+        {
+            public SpawnSpec(EnemyType type, Vector2 offset)
+            {
+                Type = type;
+                Offset = offset;
+            }
+
+            public EnemyType Type { get; }
+            public Vector2 Offset { get; }
         }
 
         /// <summary>
@@ -414,8 +446,12 @@ namespace TwinStickShooter
                 }
 
                 // TODO: remover cuando el sistema de spawns por plantilla (Etapa 5) esté listo.
-                _enemyManager.Spawn(spawnPosition + new Vector2(150f, 150f), Vector2.Zero, EnemyType.Roamer);
-                _enemyManager.Spawn(spawnPosition + new Vector2(210f, 120f), Vector2.Zero, EnemyType.Roamer);
+                SpawnDebugEnemies(new[]
+                {
+                    new SpawnSpec(EnemyType.Roamer, new Vector2(150f, 150f)),
+                    new SpawnSpec(EnemyType.Roamer, new Vector2(210f, 120f)),
+                    new SpawnSpec(EnemyType.Swarmer, new Vector2(260f, 180f))
+                }, spawnPosition + new Vector2(100f, 100f));
                 return;
             }
 
@@ -437,17 +473,25 @@ namespace TwinStickShooter
                     Vector2 worldPos = spawnPoints[i];
                     if (_levelManager.IsWalkable(worldPos, GameConstants.EnemyRadius))
                     {
-                        _enemyManager.Spawn(worldPos, new Vector2(10f, 10f));
+                        _enemyManager.Spawn(worldPos, new Vector2(10f, 10f), EnemyType.Swarmer);
                         Console.WriteLine($"[Game1] Enemigo spawneado en RoomEnemySpawnPoint: {worldPos}");
                     }
                     else
                     {
                         Vector2 validPos = FindValidSpawnPosition(worldPos, _levelManager.GetSpawnPosition());
-                        _enemyManager.Spawn(validPos, new Vector2(10f, 10f));
+                        _enemyManager.Spawn(validPos, new Vector2(10f, 10f), EnemyType.Swarmer);
                         Console.WriteLine($"[Game1] Enemigo spawneado en fallback para RoomEnemySpawnPoint: {validPos}");
                     }
                 }
             }
+
+            // TODO: remover cuando el sistema de spawns por plantilla (Etapa 5) esté listo.
+            SpawnDebugEnemies(new[]
+            {
+                new SpawnSpec(EnemyType.Roamer, new Vector2(200f, 200f)),
+                new SpawnSpec(EnemyType.Roamer, new Vector2(260f, 160f)),
+                new SpawnSpec(EnemyType.Swarmer, new Vector2(210f, 240f))
+            }, _levelManager.GetSpawnPosition());
 
             // 2. Regla para el resto (salas sin plantilla):
             // 1 enemigo cada N celdas² de área de sala, colocado en un punto random walkable dentro del Rectangle de la sala.
