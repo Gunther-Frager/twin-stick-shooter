@@ -24,6 +24,7 @@ namespace TwinStickShooter
 
         private readonly Player[] _players = new Player[GameConstants.MaxPlayers];
         private BulletManager _bulletManager;
+        private EnemyBulletManager _enemyBulletManager;
         private ParticleSystem _particleSystem;
         private LevelManager _levelManager;
         private EnemyManager _enemyManager;
@@ -137,7 +138,8 @@ namespace TwinStickShooter
             }
 
             _bulletManager.Update(deltaTime, _enemyManager.Enemies);
-            _enemyManager.Update(deltaTime);
+            _enemyManager.Update(deltaTime, _players, _enemyBulletManager);
+            _enemyBulletManager.Update(deltaTime, _players);
             _particleSystem.Update(deltaTime);
 
             UpdateDebugTitle(gameTime);
@@ -219,6 +221,7 @@ namespace TwinStickShooter
             _enemyRenderer.Draw(GraphicsDevice, _enemyManager.Enemies, viewMatrix);
             _shipRenderer.Draw(GraphicsDevice, _players, viewMatrix);
             _bulletRenderer.Draw(GraphicsDevice, _bulletManager.Bullets, viewMatrix);
+            _bulletRenderer.Draw(GraphicsDevice, _enemyBulletManager.Bullets, viewMatrix);
 
             // Dibujar la consola de depuración
             _debugConsole.Draw(gameTime);
@@ -386,6 +389,7 @@ namespace TwinStickShooter
             _inputManager = new InputManager();
             _levelManager = new LevelManager(GameConstants.GridWidth, GameConstants.GridHeight, GameConstants.GridCellSize);
             _bulletManager = new BulletManager(_levelManager);
+            _enemyBulletManager = new EnemyBulletManager(_levelManager);
             _particleSystem = new ParticleSystem(GameConstants.MaxParticles);
             _enemyManager = new EnemyManager(_levelManager);
             _camera = new Camera();
@@ -450,7 +454,8 @@ namespace TwinStickShooter
                 {
                     new SpawnSpec(EnemyType.Roamer, new Vector2(150f, 150f)),
                     new SpawnSpec(EnemyType.Roamer, new Vector2(210f, 120f)),
-                    new SpawnSpec(EnemyType.Swarmer, new Vector2(260f, 180f))
+                    new SpawnSpec(EnemyType.Swarmer, new Vector2(260f, 180f)),
+                    new SpawnSpec(EnemyType.Turret, new Vector2(120f, 80f))
                 }, spawnPosition + new Vector2(100f, 100f));
                 return;
             }
@@ -490,7 +495,8 @@ namespace TwinStickShooter
             {
                 new SpawnSpec(EnemyType.Roamer, new Vector2(200f, 200f)),
                 new SpawnSpec(EnemyType.Roamer, new Vector2(260f, 160f)),
-                new SpawnSpec(EnemyType.Swarmer, new Vector2(210f, 240f))
+                new SpawnSpec(EnemyType.Swarmer, new Vector2(210f, 240f)),
+                new SpawnSpec(EnemyType.Turret, new Vector2(120f, 80f))
             }, _levelManager.GetSpawnPosition());
 
             // 2. Regla para el resto (salas sin plantilla):

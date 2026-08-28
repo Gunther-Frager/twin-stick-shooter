@@ -1,3 +1,4 @@
+using System;
 using Microsoft.Xna.Framework;
 using TwinStickShooter.Core;
 using TwinStickShooter.Input;
@@ -20,6 +21,9 @@ namespace TwinStickShooter.Entities
         public float FacingAngle; // radianes, 0 = mirando a la derecha (+X)
         public bool ShieldActive;
         public bool IsActive;
+        public float Health;
+        public float MaxHealth;
+        public float InvulnerabilityTimer;
 
         public Player(int index, Vector2 spawnPosition)
         {
@@ -27,10 +31,30 @@ namespace TwinStickShooter.Entities
             Color = GameConstants.PlayerColors[index % GameConstants.PlayerColors.Length];
             Position = spawnPosition;
             FacingAngle = 0f;
+            Health = MaxHealth = GameConstants.PlayerMaxHealth;
+        }
+
+        public void TakeDamage(float amount)
+        {
+            if (InvulnerabilityTimer > 0f)
+            {
+                return;
+            }
+
+            Health -= amount;
+            if (Health < 0f)
+            {
+                Health = 0f;
+            }
+
+            InvulnerabilityTimer = GameConstants.PlayerInvulnerabilitySeconds;
+            Console.WriteLine($"[Player] Jugador {Index} recibió daño. Health: {Health:0.##}");
         }
 
         public void Update(in PlayerInputState input, float deltaTime, LevelManager levelManager = null)
         {
+            InvulnerabilityTimer = Math.Max(0f, InvulnerabilityTimer - deltaTime);
+
             if (!input.IsConnected)
             {
                 return;

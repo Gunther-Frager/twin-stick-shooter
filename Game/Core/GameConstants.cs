@@ -17,6 +17,8 @@ namespace TwinStickShooter.Core
         public const int MaxPlayers = 4;
         public const float PlayerSpeed = 260f;       // px/seg
         public const float PlayerRadius = 16f;
+        public const float PlayerMaxHealth = 100f;
+        public const float PlayerInvulnerabilitySeconds = 0.5f;
 
         // --- Input ---
         // Deadzone radial: por debajo de este magnitud, el stick se considera en reposo.
@@ -31,6 +33,8 @@ namespace TwinStickShooter.Core
         public const float BulletLifetimeSeconds = 1.2f;
         public const float BulletRadius = 4f;
         public const float ShootCooldownSeconds = 0.12f; // ~8.3 disparos/seg
+        public const int MaxEnemyBullets = 96;
+        public const float TurretBulletDamage = 10f;
 
         // --- Partículas (Fase 2: struct-based, sin pooling de objetos) ---
         public const int MaxParticles = 512;

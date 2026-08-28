@@ -62,9 +62,16 @@ namespace TwinStickShooter.Entities
                 enemy.RoamDirection = Vector2.UnitX;
                 enemy.RoamChangeTimer = 0f;
             }
+            else if (type == EnemyType.Turret)
+            {
+                enemy.Health = enemy.MaxHealth = GameConstants.TurretHealth;
+                enemy.DetectionRange = GameConstants.TurretDetectionRange;
+                enemy.ShootCooldown = GameConstants.TurretShootCooldown;
+                enemy.ShootTimer = 0f;
+            }
         }
 
-        public void Update(float deltaTime)
+        public void Update(float deltaTime, Player[] players, EnemyBulletManager enemyBullets)
         {
             Enemy[] items = _pool.Items;
             int activeEnemies = 0;
@@ -88,12 +95,69 @@ namespace TwinStickShooter.Entities
                         UpdateRoamer(enemy, deltaTime);
                         break;
                     case Core.EnemyType.Turret:
+                        UpdateTurret(enemy, deltaTime, players, enemyBullets);
+                        break;
                     case Core.EnemyType.Spawner:
                         // Aún no implementados — se agregan en etapas siguientes.
                         break;
                 }
             }
             Console.WriteLine($"[EnemyManager] Enemigos activos: {activeEnemies}");
+        }
+
+        private Player FindNearestActivePlayer(Vector2 position, Player[] players)
+        {
+            Player nearest = null;
+            float bestDistSq = float.MaxValue;
+
+            for (int i = 0; i < players.Length; i++)
+            {
+                if (!players[i].IsActive)
+                {
+                    continue;
+                }
+
+                float distSq = Vector2.DistanceSquared(position, players[i].Position);
+                if (distSq < bestDistSq)
+                {
+                    bestDistSq = distSq;
+                    nearest = players[i];
+                }
+            }
+
+            return nearest;
+        }
+
+        private void UpdateTurret(Enemy enemy, float deltaTime, Player[] players, EnemyBulletManager enemyBullets)
+        {
+            Player target = FindNearestActivePlayer(enemy.Position, players);
+            if (target == null)
+            {
+                return;
+            }
+
+            float distance = Vector2.Distance(enemy.Position, target.Position);
+            if (distance > enemy.DetectionRange)
+            {
+                return;
+            }
+
+            enemy.ShootTimer -= deltaTime;
+            if (enemy.ShootTimer > 0f)
+            {
+                return;
+            }
+
+            enemy.ShootTimer = enemy.ShootCooldown;
+            Vector2 direction = target.Position - enemy.Position;
+            if (direction != Vector2.Zero)
+            {
+                direction.Normalize();
+            }
+
+            float angle = (float)Math.Atan2(direction.Y, direction.X);
+            enemyBullets.Spawn(enemy.Position, angle, enemy.Color);
+            Console.WriteLine($"[EnemyManager] Turret dispara hacia jugador {target.Index}.");
         }
 
         /// <summary>Actualiza el movimiento y ciclo de vida de un Swarmer.</summary>
