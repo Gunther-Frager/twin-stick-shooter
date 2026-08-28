@@ -412,6 +412,10 @@ namespace TwinStickShooter
                         _enemyManager.Spawn(alternativePosition, new Vector2(10f, 10f));
                     }
                 }
+
+                // TODO: remover cuando el sistema de spawns por plantilla (Etapa 5) esté listo.
+                _enemyManager.Spawn(spawnPosition + new Vector2(150f, 150f), Vector2.Zero, EnemyType.Roamer);
+                _enemyManager.Spawn(spawnPosition + new Vector2(210f, 120f), Vector2.Zero, EnemyType.Roamer);
                 return;
             }
 
