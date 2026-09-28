@@ -60,7 +60,7 @@ namespace TwinStickShooter.Entities
             float radius = type == EnemyType.Spawner
                 ? GameConstants.SpawnerRadius
                 : GameConstants.EnemyRadius;
-            if (!_levelManager.IsWalkable(position, radius))
+            if (!_levelManager.IsPlayableAndWalkable(position, radius))
             {
                 return false;
             }

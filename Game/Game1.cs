@@ -317,7 +317,7 @@ namespace TwinStickShooter
         /// </summary>
         private bool TryFindValidSpawnPosition(Vector2 originalPosition, float radius, out Vector2 validPosition)
         {
-            if (_levelManager.IsWalkable(originalPosition, radius))
+            if (_levelManager.IsPlayableAndWalkable(originalPosition, radius))
             {
                 validPosition = originalPosition;
                 return true;
@@ -337,7 +337,7 @@ namespace TwinStickShooter
                         }
 
                         Vector2 testPosition = _levelManager.GridToWorld(new Point(x, y));
-                        if (_levelManager.IsWalkable(testPosition, radius))
+                        if (_levelManager.IsPlayableAndWalkable(testPosition, radius))
                         {
                             validPosition = testPosition;
                             return true;
@@ -506,7 +506,7 @@ namespace TwinStickShooter
                 for (int i = 0; i < 2; i++)
                 {
                     Vector2 position = enemyPositions[i];
-                    if (_levelManager.IsWalkable(position, GameConstants.EnemyRadius))
+                    if (_levelManager.IsPlayableAndWalkable(position, GameConstants.EnemyRadius))
                     {
                         _enemyManager.Spawn(position, new Vector2(10f, 10f));
                     }
@@ -550,7 +550,7 @@ namespace TwinStickShooter
                     float entityRadius = spawnPoints[i].Type == EnemyType.Spawner
                         ? GameConstants.SpawnerRadius
                         : GameConstants.EnemyRadius;
-                    if (_levelManager.IsWalkable(worldPos, entityRadius))
+                    if (_levelManager.IsPlayableAndWalkable(worldPos, entityRadius))
                     {
                         RegisterTemplateSpawn(worldPos, spawnPoints[i].Type);
                     }
@@ -613,7 +613,7 @@ namespace TwinStickShooter
                             
                             Vector2 worldPos = _levelManager.GridToWorld(new Point(rx, ry));
                             
-                            if (_levelManager.IsWalkable(worldPos, GameConstants.EnemyRadius))
+                            if (_levelManager.IsPlayableAndWalkable(worldPos, GameConstants.EnemyRadius))
                             {
                                 // Tarea 2: Verificar distancia a RoomEnemySpawnPoints
                                 bool tooClose = false;
@@ -649,7 +649,7 @@ namespace TwinStickShooter
         {
             if (type == EnemyType.Spawner)
             {
-                if (_levelManager.IsWalkable(position, GameConstants.SpawnerRadius))
+                if (_levelManager.IsPlayableAndWalkable(position, GameConstants.SpawnerRadius))
                 {
                     _spawnerManager.Register(position);
                 }
@@ -698,12 +698,12 @@ namespace TwinStickShooter
                 {
                     // Solo el jugador 0 está activo en modo un jugador
                     _players[i].IsActive = i == 0 &&
-                        _levelManager.IsWalkable(_players[i].Position, GameConstants.PlayerRadius);
+                        _levelManager.IsPlayableAndWalkable(_players[i].Position, GameConstants.PlayerRadius);
                 }
                 else if (mode == GameState.Multiplayer)
                 {
                     // Todos los jugadores están activos en modo multijugador
-                    _players[i].IsActive = _levelManager.IsWalkable(
+                    _players[i].IsActive = _levelManager.IsPlayableAndWalkable(
                         _players[i].Position,
                         GameConstants.PlayerRadius);
                 }

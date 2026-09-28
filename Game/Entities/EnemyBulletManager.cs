@@ -67,6 +67,7 @@ namespace TwinStickShooter.Entities
                     out Vector2 hitPosition,
                     out Vector2 hitNormal);
                 bullet.Position = hitWall ? hitPosition : nextPosition;
+                bool bounced = false;
 
                 if (hitWall && bullet.RemainingBounces > 0 && hitNormal.LengthSquared() > 0.000001f)
                 {
@@ -74,6 +75,12 @@ namespace TwinStickShooter.Entities
                     bullet.RemainingBounces--;
                     bullet.Position += hitNormal * 0.01f;
                     hitWall = false;
+                    bounced = true;
+                }
+
+                if (bounced)
+                {
+                    offWorld = false;
                 }
                 bool hitPlayer = false;
 

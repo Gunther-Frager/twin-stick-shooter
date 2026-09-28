@@ -43,7 +43,7 @@ namespace TwinStickShooter.Entities
         public void Emit(Vector2 position, Vector2 velocity, float life, float size, Color color)
         {
             float radius = size * 0.5f;
-            if (_levelManager != null && !_levelManager.IsWalkable(position, radius))
+            if (_levelManager != null && !_levelManager.IsPlayableAndWalkable(position, radius))
             {
                 return;
             }

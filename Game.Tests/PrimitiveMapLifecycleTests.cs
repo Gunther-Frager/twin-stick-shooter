@@ -31,4 +31,25 @@ public class PrimitiveMapLifecycleTests
 
         Assert.Contains("RebuildPrimitiveMapFromGrid", exception.Message);
     }
+
+    [Fact]
+    public void PlayableArea_ShouldRejectWalkablePocketSeparatedFromSpawn()
+    {
+        var level = new LevelManager(6, 6, 16)
+        {
+            UseRoundedContours = false
+        };
+
+        for (int y = 1; y < 5; y++)
+        {
+            level.SetCollision(3, y, true);
+        }
+
+        level.SetSpawnPosition(1, 2);
+        level.RebuildPrimitiveMapFromGrid();
+
+        Assert.True(level.IsPlayableAndWalkable(level.GridToWorld(new Point(1, 2)), 1f));
+        Assert.False(level.IsPlayableAndWalkable(level.GridToWorld(new Point(4, 2)), 1f));
+        Assert.False(level.IsInPlayableArea(level.GridToWorld(new Point(4, 2))));
+    }
 }

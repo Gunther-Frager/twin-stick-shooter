@@ -16,6 +16,7 @@ namespace TwinStickShooter.Core
         private readonly int _gridHeight;
         private readonly int _cellSize;
         private readonly bool[,] _collisionGrid;
+        private readonly bool[,] _playableArea;
         private readonly List<MapCircle> _primitiveCircles = new List<MapCircle>();
         private readonly List<MapCapsule> _primitiveCapsules = new List<MapCapsule>();
         private readonly List<MapRoundedPoly> _primitiveRoundedPolys = new List<MapRoundedPoly>();
@@ -31,6 +32,7 @@ namespace TwinStickShooter.Core
             _gridHeight = gridHeight;
             _cellSize = cellSize;
             _collisionGrid = new bool[gridWidth, gridHeight];
+            _playableArea = new bool[gridWidth, gridHeight];
             _mapGenerator = new MapGenerator(gridWidth, gridHeight, cellSize);
 
             if (gridWidth >= 8 && gridHeight >= 8)
@@ -56,6 +58,7 @@ namespace TwinStickShooter.Core
             {
                 _collisionGrid[x, y] = collides;
                 _primitiveMapInitialized = false;
+                _playableArea[x, y] = false;
             }
         }
 
@@ -216,6 +219,19 @@ namespace TwinStickShooter.Core
             return !CheckCollision(worldPosition, radius);
         }
 
+        public bool IsInPlayableArea(Vector2 worldPosition)
+        {
+            Point gridPosition = WorldToGrid(worldPosition);
+            return gridPosition.X >= 0 && gridPosition.X < _gridWidth &&
+                gridPosition.Y >= 0 && gridPosition.Y < _gridHeight &&
+                _playableArea[gridPosition.X, gridPosition.Y];
+        }
+
+        public bool IsPlayableAndWalkable(Vector2 worldPosition, float radius)
+        {
+            return IsInPlayableArea(worldPosition) && IsWalkable(worldPosition, radius);
+        }
+
         public bool TrySweepCircle(Vector2 start, Vector2 end, float radius, out Vector2 hitPosition, out Vector2 hitNormal)
         {
             hitPosition = end;
@@ -287,6 +303,12 @@ namespace TwinStickShooter.Core
                     hitNormal = -Vector2.Normalize(displacement);
                 }
 
+                if (hitNormal.LengthSquared() > 0.000001f &&
+                    Vector2.Dot(hitNormal, displacement) > 0f)
+                {
+                    hitNormal = -hitNormal;
+                }
+
                 return true;
             }
 
@@ -318,6 +340,7 @@ namespace TwinStickShooter.Core
         public void SetSpawnPosition(int x, int y)
         {
             _spawnPosition = new Point(x, y);
+            RebuildPlayableArea();
         }
 
         public void SetExitPosition(int x, int y)
@@ -458,6 +481,52 @@ namespace TwinStickShooter.Core
             }
 
             _primitiveMapInitialized = true;
+            RebuildPlayableArea();
+        }
+
+        private void RebuildPlayableArea()
+        {
+            Array.Clear(_playableArea, 0, _playableArea.Length);
+
+            if (_spawnPosition.X < 0 || _spawnPosition.X >= _gridWidth ||
+                _spawnPosition.Y < 0 || _spawnPosition.Y >= _gridHeight ||
+                IsWorldBorderCell(_spawnPosition.X, _spawnPosition.Y) ||
+                _collisionGrid[_spawnPosition.X, _spawnPosition.Y])
+            {
+                return;
+            }
+
+            var queue = new Queue<Point>();
+            queue.Enqueue(_spawnPosition);
+            _playableArea[_spawnPosition.X, _spawnPosition.Y] = true;
+
+            while (queue.Count > 0)
+            {
+                Point current = queue.Dequeue();
+                VisitPlayableCell(current.X + 1, current.Y, queue);
+                VisitPlayableCell(current.X - 1, current.Y, queue);
+                VisitPlayableCell(current.X, current.Y + 1, queue);
+                VisitPlayableCell(current.X, current.Y - 1, queue);
+            }
+        }
+
+        private void VisitPlayableCell(int x, int y, Queue<Point> queue)
+        {
+            if (x < 0 || x >= _gridWidth || y < 0 || y >= _gridHeight ||
+                IsWorldBorderCell(x, y) ||
+                _collisionGrid[x, y] || _playableArea[x, y])
+            {
+                return;
+            }
+
+            _playableArea[x, y] = true;
+            queue.Enqueue(new Point(x, y));
+        }
+
+        private bool IsWorldBorderCell(int x, int y)
+        {
+            return _gridWidth > 2 && _gridHeight > 2 &&
+                (x == 0 || y == 0 || x == _gridWidth - 1 || y == _gridHeight - 1);
         }
 
         private void BuildRegionPrimitives(List<Point> region)
@@ -552,8 +621,8 @@ namespace TwinStickShooter.Core
             }
 
             RebuildPrimitiveMapFromGrid();
-            _spawnPosition = _mapGenerator.SpawnPoint;
-            _exitPosition = _mapGenerator.ExitPoint;
+            SetSpawnPosition(_mapGenerator.SpawnPoint.X, _mapGenerator.SpawnPoint.Y);
+            SetExitPosition(_mapGenerator.ExitPoint.X, _mapGenerator.ExitPoint.Y);
         }
 
         private static Vector2 ClosestPointOnSegment(Vector2 p, Vector2 a, Vector2 b)
