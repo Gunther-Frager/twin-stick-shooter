@@ -17,6 +17,7 @@ namespace TwinStickShooter.Core
         private readonly bool[,] _collisionGrid;
         private readonly List<MapCircle> _primitiveCircles = new List<MapCircle>();
         private readonly List<MapCapsule> _primitiveCapsules = new List<MapCapsule>();
+        private bool _primitiveMapInitialized;
         private MapGenerator _mapGenerator;
         public MapGenerator MapGenerator => _mapGenerator;
         private Point _spawnPosition;
@@ -38,7 +39,7 @@ namespace TwinStickShooter.Core
 
         public IReadOnlyList<MapCircle> PrimitiveCircles => _primitiveCircles;
         public IReadOnlyList<MapCapsule> PrimitiveCapsules => _primitiveCapsules;
-        public bool HasPrimitiveMapData() => _primitiveCircles.Count > 0 || _primitiveCapsules.Count > 0;
+        public bool HasPrimitiveMapData() => _primitiveMapInitialized;
 
         /// <summary>
         /// Establece una celda como colisionable.
@@ -48,6 +49,7 @@ namespace TwinStickShooter.Core
             if (x >= 0 && x < _gridWidth && y >= 0 && y < _gridHeight)
             {
                 _collisionGrid[x, y] = collides;
+                _primitiveMapInitialized = false;
             }
         }
 
@@ -63,6 +65,7 @@ namespace TwinStickShooter.Core
 
             SetSpawnPosition(_gridWidth / 2, _gridHeight / 2);
             SetExitPosition(_gridWidth - 2, _gridHeight - 2);
+            RebuildPrimitiveMapFromGrid();
         }
 
         /// <summary>
@@ -71,43 +74,28 @@ namespace TwinStickShooter.Core
         /// </summary>
         public bool CheckCollision(Vector2 position, float radius)
         {
-            if (HasPrimitiveMapData())
+            if (!HasPrimitiveMapData())
             {
-                foreach (var circle in _primitiveCircles)
-                {
-                    if (Vector2.DistanceSquared(position, circle.Center) <= (radius + circle.Radius) * (radius + circle.Radius))
-                    {
-                        return true;
-                    }
-                }
-
-                foreach (var capsule in _primitiveCapsules)
-                {
-                    Vector2 closest = ClosestPointOnSegment(position, capsule.Start, capsule.End);
-                    if (Vector2.DistanceSquared(position, closest) <= (radius + capsule.Radius) * (radius + capsule.Radius))
-                    {
-                        return true;
-                    }
-                }
-
-                return false;
+                throw new InvalidOperationException("Primitive map data is not initialized. Call RebuildPrimitiveMapFromGrid or SetPrimitiveMap before checking collisions.");
             }
 
-            int minX = (int)Math.Floor((position.X - radius) / _cellSize);
-            int maxX = (int)Math.Floor((position.X + radius) / _cellSize);
-            int minY = (int)Math.Floor((position.Y - radius) / _cellSize);
-            int maxY = (int)Math.Floor((position.Y + radius) / _cellSize);
-
-            for (int x = minX; x <= maxX; x++)
+            foreach (var circle in _primitiveCircles)
             {
-                for (int y = minY; y <= maxY; y++)
+                if (Vector2.DistanceSquared(position, circle.Center) <= (radius + circle.Radius) * (radius + circle.Radius))
                 {
-                    if (x >= 0 && x < _gridWidth && y >= 0 && y < _gridHeight && _collisionGrid[x, y])
-                    {
-                        return true;
-                    }
+                    return true;
                 }
             }
+
+            foreach (var capsule in _primitiveCapsules)
+            {
+                Vector2 closest = ClosestPointOnSegment(position, capsule.Start, capsule.End);
+                if (Vector2.DistanceSquared(position, closest) <= (radius + capsule.Radius) * (radius + capsule.Radius))
+                {
+                    return true;
+                }
+            }
+
             return false;
         }
 
@@ -142,41 +130,26 @@ namespace TwinStickShooter.Core
             );
         }
 
-        /// <summary>
-        /// Establece la posición de spawn del jugador.
-        /// </summary>
         public void SetSpawnPosition(int x, int y)
         {
             _spawnPosition = new Point(x, y);
         }
 
-        /// <summary>
-        /// Establece la posición de salida del nivel.
-        /// </summary>
         public void SetExitPosition(int x, int y)
         {
             _exitPosition = new Point(x, y);
         }
 
-        /// <summary>
-        /// Obtiene la posición de spawn del jugador en coordenadas del mundo.
-        /// </summary>
         public Vector2 GetSpawnPosition()
         {
             return GridToWorld(_spawnPosition);
         }
 
-        /// <summary>
-        /// Obtiene la posición de salida del nivel en coordenadas del mundo.
-        /// </summary>
         public Vector2 GetExitPosition()
         {
             return GridToWorld(_exitPosition);
         }
 
-        /// <summary>
-        /// Verifica si el jugador ha alcanzado el marcador de salida.
-        /// </summary>
         public bool CheckExitReached(Vector2 playerPosition)
         {
             Vector2 exitWorldPosition = GridToWorld(_exitPosition);
@@ -192,6 +165,7 @@ namespace TwinStickShooter.Core
         {
             _primitiveCircles.Clear();
             _primitiveCapsules.Clear();
+            _primitiveMapInitialized = true;
 
             if (definition == null)
             {
@@ -270,7 +244,9 @@ namespace TwinStickShooter.Core
 
                                 int nx = current.X + dx;
                                 int ny = current.Y + dy;
-                                if (nx >= 0 && nx < _gridWidth && ny >= 0 && ny < _gridHeight && _collisionGrid[nx, ny] && !visited[nx, ny])
+                                bool isNeighborWorldBorder = _gridWidth > 2 && _gridHeight > 2 &&
+                                    (nx == 0 || ny == 0 || nx == _gridWidth - 1 || ny == _gridHeight - 1);
+                                if (!isNeighborWorldBorder && nx >= 0 && nx < _gridWidth && ny >= 0 && ny < _gridHeight && _collisionGrid[nx, ny] && !visited[nx, ny])
                                 {
                                     visited[nx, ny] = true;
                                     queue.Enqueue(new Point(nx, ny));
@@ -282,140 +258,170 @@ namespace TwinStickShooter.Core
                     BuildRegionPrimitives(region);
                 }
             }
+
+            BuildBoundaryPrimitives();
+            _primitiveMapInitialized = true;
+        }
+
+        private void BuildBoundaryPrimitives()
+        {
+            if (_gridWidth < 3 || _gridHeight < 3)
+            {
+                return;
+            }
+
+            AddHorizontalBoundaryPrimitives(0);
+            AddHorizontalBoundaryPrimitives(_gridHeight - 1);
+            AddVerticalBoundaryPrimitives(0);
+            AddVerticalBoundaryPrimitives(_gridWidth - 1);
+
+            AddBoundaryCorner(0, 0);
+            AddBoundaryCorner(_gridWidth - 1, 0);
+            AddBoundaryCorner(0, _gridHeight - 1);
+            AddBoundaryCorner(_gridWidth - 1, _gridHeight - 1);
+        }
+
+        private void AddHorizontalBoundaryPrimitives(int y)
+        {
+            int x = 1;
+            while (x < _gridWidth - 1)
+            {
+                if (!_collisionGrid[x, y])
+                {
+                    x++;
+                    continue;
+                }
+
+                int startX = x;
+                while (x + 1 < _gridWidth - 1 && _collisionGrid[x + 1, y])
+                {
+                    x++;
+                }
+
+                Vector2 start = CellCenter(startX, y);
+                Vector2 end = CellCenter(x, y);
+                AddBoundaryRun(start, end);
+                x++;
+            }
+        }
+
+        private void AddVerticalBoundaryPrimitives(int x)
+        {
+            int y = 1;
+            while (y < _gridHeight - 1)
+            {
+                if (!_collisionGrid[x, y])
+                {
+                    y++;
+                    continue;
+                }
+
+                int startY = y;
+                while (y + 1 < _gridHeight - 1 && _collisionGrid[x, y + 1])
+                {
+                    y++;
+                }
+
+                Vector2 start = CellCenter(x, startY);
+                Vector2 end = CellCenter(x, y);
+                AddBoundaryRun(start, end);
+                y++;
+            }
+        }
+
+        private void AddBoundaryRun(Vector2 start, Vector2 end)
+        {
+            float radius = _cellSize * 0.5f;
+            if (start == end)
+            {
+                _primitiveCircles.Add(new MapCircle { Center = start, Radius = radius });
+                return;
+            }
+
+            _primitiveCapsules.Add(new MapCapsule { Start = start, End = end, Radius = radius });
+        }
+
+        private void AddBoundaryCorner(int x, int y)
+        {
+            if (_collisionGrid[x, y])
+            {
+                _primitiveCircles.Add(new MapCircle
+                {
+                    Center = CellCenter(x, y),
+                    Radius = _cellSize * 0.72f
+                });
+            }
         }
 
         private void BuildRegionPrimitives(List<Point> region)
         {
-            if (region.Count == 0)
-            {
-                return;
-            }
+            var remaining = new HashSet<Point>(region);
+            var orderedCells = region.OrderBy(cell => cell.Y).ThenBy(cell => cell.X);
 
-            if (region.Count == 1)
+            foreach (Point start in orderedCells)
             {
-                var cell = region[0];
-                _primitiveCircles.Add(new MapCircle
+                if (!remaining.Contains(start))
                 {
-                    Center = CellCenter(cell.X, cell.Y),
-                    Radius = _cellSize * 0.38f
+                    continue;
+                }
+
+                int width = 1;
+                while (remaining.Contains(new Point(start.X + width, start.Y)))
+                {
+                    width++;
+                }
+
+                int height = 1;
+                while (Enumerable.Range(start.X, width)
+                    .All(x => remaining.Contains(new Point(x, start.Y + height))) &&
+                    !remaining.Contains(new Point(start.X - 1, start.Y + height)) &&
+                    !remaining.Contains(new Point(start.X + width, start.Y + height)))
+                {
+                    height++;
+                }
+
+                foreach (int x in Enumerable.Range(start.X, width))
+                {
+                    foreach (int y in Enumerable.Range(start.Y, height))
+                    {
+                        remaining.Remove(new Point(x, y));
+                    }
+                }
+
+                int minorSide = Math.Min(width, height);
+                Vector2 center = new Vector2(
+                    (start.X + width * 0.5f) * _cellSize,
+                    (start.Y + height * 0.5f) * _cellSize);
+
+                if (Math.Abs(width - height) <= 1)
+                {
+                    _primitiveCircles.Add(new MapCircle
+                    {
+                        Center = center,
+                        Radius = minorSide * _cellSize * 0.38f
+                    });
+                    continue;
+                }
+
+                Vector2 capsuleStart;
+                Vector2 capsuleEnd;
+                if (width > height)
+                {
+                    capsuleStart = new Vector2((start.X + 0.5f) * _cellSize, center.Y);
+                    capsuleEnd = new Vector2((start.X + width - 0.5f) * _cellSize, center.Y);
+                }
+                else
+                {
+                    capsuleStart = new Vector2(center.X, (start.Y + 0.5f) * _cellSize);
+                    capsuleEnd = new Vector2(center.X, (start.Y + height - 0.5f) * _cellSize);
+                }
+
+                _primitiveCapsules.Add(new MapCapsule
+                {
+                    Start = capsuleStart,
+                    End = capsuleEnd,
+                    Radius = minorSide * _cellSize * 0.32f
                 });
-                return;
-            }
-
-            var byRow = new Dictionary<int, List<int>>();
-            var byColumn = new Dictionary<int, List<int>>();
-
-            foreach (var cell in region)
-            {
-                if (!byRow.TryGetValue(cell.Y, out var rowCells))
-                {
-                    rowCells = new List<int>();
-                    byRow[cell.Y] = rowCells;
-                }
-                rowCells.Add(cell.X);
-
-                if (!byColumn.TryGetValue(cell.X, out var columnCells))
-                {
-                    columnCells = new List<int>();
-                    byColumn[cell.X] = columnCells;
-                }
-                columnCells.Add(cell.Y);
-            }
-
-            foreach (var row in byRow)
-            {
-                var xs = row.Value.OrderBy(x => x).ToList();
-                int start = xs[0];
-                int previous = xs[0];
-
-                for (int i = 1; i < xs.Count; i++)
-                {
-                    if (xs[i] == previous + 1)
-                    {
-                        previous = xs[i];
-                        continue;
-                    }
-
-                    if (previous - start >= 1)
-                    {
-                        var first = new Vector2(start * _cellSize + _cellSize * 0.5f, row.Key * _cellSize + _cellSize * 0.5f);
-                        var last = new Vector2(previous * _cellSize + _cellSize * 0.5f, row.Key * _cellSize + _cellSize * 0.5f);
-                        _primitiveCapsules.Add(new MapCapsule
-                        {
-                            Start = first,
-                            End = last,
-                            Radius = _cellSize * 0.32f
-                        });
-                    }
-                    else
-                    {
-                        var c = new Vector2(start * _cellSize + _cellSize * 0.5f, row.Key * _cellSize + _cellSize * 0.5f);
-                        _primitiveCircles.Add(new MapCircle { Center = c, Radius = _cellSize * 0.38f });
-                    }
-
-                    start = xs[i];
-                    previous = xs[i];
-                }
-
-                if (xs.Count > 0 && previous - start >= 1)
-                {
-                    var first = new Vector2(start * _cellSize + _cellSize * 0.5f, row.Key * _cellSize + _cellSize * 0.5f);
-                    var last = new Vector2(previous * _cellSize + _cellSize * 0.5f, row.Key * _cellSize + _cellSize * 0.5f);
-                    _primitiveCapsules.Add(new MapCapsule
-                    {
-                        Start = first,
-                        End = last,
-                        Radius = _cellSize * 0.32f
-                    });
-                }
-                else if (xs.Count > 0)
-                {
-                    var c = new Vector2(xs[0] * _cellSize + _cellSize * 0.5f, row.Key * _cellSize + _cellSize * 0.5f);
-                    _primitiveCircles.Add(new MapCircle { Center = c, Radius = _cellSize * 0.38f });
-                }
-            }
-
-            foreach (var col in byColumn)
-            {
-                var ys = col.Value.OrderBy(y => y).ToList();
-                int start = ys[0];
-                int previous = ys[0];
-
-                for (int i = 1; i < ys.Count; i++)
-                {
-                    if (ys[i] == previous + 1)
-                    {
-                        previous = ys[i];
-                        continue;
-                    }
-
-                    if (previous - start >= 1)
-                    {
-                        var first = new Vector2(col.Key * _cellSize + _cellSize * 0.5f, start * _cellSize + _cellSize * 0.5f);
-                        var last = new Vector2(col.Key * _cellSize + _cellSize * 0.5f, previous * _cellSize + _cellSize * 0.5f);
-                        _primitiveCapsules.Add(new MapCapsule
-                        {
-                            Start = first,
-                            End = last,
-                            Radius = _cellSize * 0.32f
-                        });
-                    }
-
-                    start = ys[i];
-                    previous = ys[i];
-                }
-
-                if (ys.Count > 0 && previous - start >= 1)
-                {
-                    var first = new Vector2(col.Key * _cellSize + _cellSize * 0.5f, start * _cellSize + _cellSize * 0.5f);
-                    var last = new Vector2(col.Key * _cellSize + _cellSize * 0.5f, previous * _cellSize + _cellSize * 0.5f);
-                    _primitiveCapsules.Add(new MapCapsule
-                    {
-                        Start = first,
-                        End = last,
-                        Radius = _cellSize * 0.32f
-                    });
-                }
             }
         }
 

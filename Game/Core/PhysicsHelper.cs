@@ -23,6 +23,15 @@ namespace TwinStickShooter.Core
             // Verificar colisiones por componente (X e Y) para permitir "deslizar" en paredes
             bool collisionX = levelManager.CheckCollision(new Vector2(newPosition.X, entity.Position.Y), entity.Radius);
             bool collisionY = levelManager.CheckCollision(new Vector2(entity.Position.X, newPosition.Y), entity.Radius);
+
+            if (collisionX && collisionY)
+            {
+                Vector2 safeX = FindLastSafePosition(entity.Position, new Vector2(moveDelta.X, 0f), entity.Radius, levelManager);
+                Vector2 safeY = FindLastSafePosition(entity.Position, new Vector2(0f, moveDelta.Y), entity.Radius, levelManager);
+                return Vector2.DistanceSquared(entity.Position, safeX) >= Vector2.DistanceSquared(entity.Position, safeY)
+                    ? safeX
+                    : safeY;
+            }
             
             if (collisionX)
             {
@@ -35,6 +44,28 @@ namespace TwinStickShooter.Core
             }
             
             return newPosition;
+        }
+
+        private static Vector2 FindLastSafePosition(Vector2 start, Vector2 axisDelta, float radius, LevelManager levelManager)
+        {
+            float safeFraction = 0f;
+            float blockedFraction = 1f;
+
+            for (int i = 0; i < 10; i++)
+            {
+                float fraction = (safeFraction + blockedFraction) * 0.5f;
+                Vector2 candidate = start + axisDelta * fraction;
+                if (levelManager.CheckCollision(candidate, radius))
+                {
+                    blockedFraction = fraction;
+                }
+                else
+                {
+                    safeFraction = fraction;
+                }
+            }
+
+            return start + axisDelta * safeFraction;
         }
         
         /// <summary>

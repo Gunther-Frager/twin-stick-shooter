@@ -48,6 +48,8 @@ namespace TwinStickShooter.Core
                     }
                 }
 
+                levelManager.RebuildPrimitiveMapFromGrid();
+
                 // Almacenar los marcadores de spawn y salida en el LevelManager
                 if (mapData.spawn != null)
                 {
