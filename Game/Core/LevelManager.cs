@@ -34,11 +34,6 @@ namespace TwinStickShooter.Core
             _collisionGrid = new bool[gridWidth, gridHeight];
             _playableArea = new bool[gridWidth, gridHeight];
             _mapGenerator = new MapGenerator(gridWidth, gridHeight, cellSize);
-
-            if (gridWidth >= 8 && gridHeight >= 8)
-            {
-                _mapGenerator.Initialize();
-            }
         }
 
         public IReadOnlyList<MapCircle> PrimitiveCircles => _primitiveCircles;
@@ -335,6 +330,20 @@ namespace TwinStickShooter.Core
                 gridPosition.X * _cellSize + _cellSize / 2f,
                 gridPosition.Y * _cellSize + _cellSize / 2f
             );
+        }
+
+        public int[,] GetCollisionGridSnapshot()
+        {
+            int[,] grid = new int[_gridWidth, _gridHeight];
+            for (int x = 0; x < _gridWidth; x++)
+            {
+                for (int y = 0; y < _gridHeight; y++)
+                {
+                    grid[x, y] = _collisionGrid[x, y] ? 1 : 0;
+                }
+            }
+
+            return grid;
         }
 
         public void SetSpawnPosition(int x, int y)

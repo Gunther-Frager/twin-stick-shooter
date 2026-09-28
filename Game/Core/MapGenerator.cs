@@ -14,21 +14,26 @@ namespace TwinStickShooter.Core
         private readonly int _width;
         private readonly int _height;
         private readonly int _cellSize;
-        private readonly Random _random;
+        private Random _random;
         private List<RoomTemplateData> _roomTemplates = new List<RoomTemplateData>();
 
+        public MapGenerationSettings Settings { get; }
         public Point SpawnPoint { get; private set; }
         public Point ExitPoint { get; private set; }
+        public int SpawnExitPathLength { get; private set; }
+        public string LastGenerationFailure { get; private set; }
         public List<Vector2> RoomEnemySpawnPoints { get; } = new List<Vector2>();
         public List<RoomTemplateData.EnemySpawn> RoomEnemySpawns { get; } = new List<RoomTemplateData.EnemySpawn>();
         public List<Rectangle> Rooms { get; private set; } = new List<Rectangle>();
+        public List<(int From, int To)> RoomConnections { get; } = new List<(int From, int To)>();
 
-        public MapGenerator(int width, int height, int cellSize)
+        public MapGenerator(int width, int height, int cellSize, MapGenerationSettings settings = null)
         {
             _width = width;
             _height = height;
             _cellSize = cellSize;
-            _random = new Random();
+            Settings = settings ?? new MapGenerationSettings();
+            _random = new Random(Settings.Seed);
         }
 
         public void SetRoomTemplates(List<RoomTemplateData> templates)
@@ -96,12 +101,25 @@ namespace TwinStickShooter.Core
 
         public int[,] GenerateMap()
         {
-            RoomEnemySpawnPoints.Clear();
-            RoomEnemySpawns.Clear();
+            Point previousSpawn = SpawnPoint;
+            Point previousExit = ExitPoint;
+            int previousPathLength = SpawnExitPathLength;
+            List<Rectangle> previousRooms = Rooms.ToList();
+            List<(int From, int To)> previousConnections = RoomConnections.ToList();
+            List<Vector2> previousSpawnPoints = RoomEnemySpawnPoints.ToList();
+            List<RoomTemplateData.EnemySpawn> previousTypedSpawns = RoomEnemySpawns.ToList();
+            _random = new Random(Settings.Seed);
             int[,] grid = new int[_width, _height];
+            LastGenerationFailure = null;
 
-            for (int attempt = 0; attempt < GameConstants.MaxGenerationAttempts; attempt++)
+            for (int attempt = 0; attempt < Math.Max(1, Settings.MaxGenerationAttempts); attempt++)
             {
+                RoomEnemySpawnPoints.Clear();
+                RoomEnemySpawns.Clear();
+                Rooms.Clear();
+                RoomConnections.Clear();
+                SpawnExitPathLength = -1;
+
                 // 1. Inicializar con paredes
                 for (int x = 0; x < _width; x++)
                 {
@@ -126,7 +144,7 @@ namespace TwinStickShooter.Core
                     Rectangle spawnRoom = rooms[0];
                     
                     // Validar que la habitación de spawn sea pequeña
-                    if (spawnRoom.Width <= GameConstants.SpawnRoomMaxSize && spawnRoom.Height <= GameConstants.SpawnRoomMaxSize)
+                    if (spawnRoom.Width <= Settings.SpawnRoomMaxSize && spawnRoom.Height <= Settings.SpawnRoomMaxSize)
                     {
                         validSpawn = true;
                         // Asegurar que el spawn esté DENTRO de la habitación pequeña
@@ -139,23 +157,20 @@ namespace TwinStickShooter.Core
                         {
                             // Filtrar centros que estén en habitaciones distintas y a una distancia mínima
                             var distantCenters = roomCenters
-                                .Where((c, index) => index > 0 && // Excluir la habitación del spawn
-                                       !IsPointInRoom(c, spawnRoom) && // Asegurar que no esté en la misma habitación
-                                       Vector2.Distance(new Vector2(c.X, c.Y), new Vector2(SpawnPoint.X, SpawnPoint.Y)) > GameConstants.MinSpawnExitDistance) // Distancia mínima
-                                .OrderByDescending(c => Vector2.Distance(new Vector2(c.X, c.Y), new Vector2(SpawnPoint.X, SpawnPoint.Y)))
+                                .Where((c, index) => index > 0 && !IsPointInRoom(c, spawnRoom))
+                                .Select(c => new { Point = c, Distance = FindPathDistance(grid, SpawnPoint, c) })
+                                .Where(candidate => candidate.Distance >= Settings.MinimumSpawnExitPathLength)
+                                .OrderByDescending(candidate => candidate.Distance)
                                 .ToList();
                             
                             if (distantCenters.Count > 0)
                             {
-                                ExitPoint = distantCenters[0];
+                                ExitPoint = distantCenters[0].Point;
+                                SpawnExitPathLength = distantCenters[0].Distance;
                             }
                             else
                             {
-                                // Si no hay habitaciones suficientemente lejanas, elegir la más lejana disponible
-                                ExitPoint = roomCenters
-                                    .Where((c, index) => index > 0 && !IsPointInRoom(c, spawnRoom))
-                                    .OrderByDescending(c => Vector2.Distance(new Vector2(c.X, c.Y), new Vector2(SpawnPoint.X, SpawnPoint.Y)))
-                                    .FirstOrDefault(new Point(_width - 2, _height - 2));
+                                validSpawn = false;
                             }
                         }
                         else
@@ -170,22 +185,37 @@ namespace TwinStickShooter.Core
                     ExitPoint = new Point(_width - 2, _height - 2);
                 }
 
+                SpawnExitPathLength = FindPathDistance(grid, SpawnPoint, ExitPoint);
                 // 5. Verificar transitabilidad total con BFS (asegurar que todas las salas sean accesibles)
-                if (validSpawn && IsMapFullyTraversable(grid, SpawnPoint, ExitPoint, roomCenters))
+                if (validSpawn && IsMapFullyTraversable(grid, SpawnPoint, ExitPoint, roomCenters) &&
+                    SpawnExitPathLength >= Settings.MinimumSpawnExitPathLength)
                 {
                     return grid;
                 }
             }
 
-            Console.WriteLine("[MapGenerator] WARNING: Se agotaron los intentos de generación. Devolviendo último mapa generado.");
-            return grid;
+            LastGenerationFailure = $"No se generó un mapa válido tras {Math.Max(1, Settings.MaxGenerationAttempts)} intentos. " +
+                $"Distancia mínima requerida: {Settings.MinimumSpawnExitPathLength} celdas.";
+            SpawnPoint = previousSpawn;
+            ExitPoint = previousExit;
+            SpawnExitPathLength = previousPathLength;
+            Rooms = previousRooms;
+            RoomConnections.Clear();
+            RoomConnections.AddRange(previousConnections);
+            RoomEnemySpawnPoints.Clear();
+            RoomEnemySpawnPoints.AddRange(previousSpawnPoints);
+            RoomEnemySpawns.Clear();
+            RoomEnemySpawns.AddRange(previousTypedSpawns);
+            throw new InvalidOperationException(LastGenerationFailure);
         }
 
         private List<Rectangle> GenerateRooms(int[,] grid)
         {
             List<Rectangle> rooms = new List<Rectangle>();
             Rooms.Clear();
-            int roomCount = _random.Next(GameConstants.MinRoomCount, GameConstants.MaxRoomCount); // Más habitaciones para mayor complejidad
+            int minRoomCount = Math.Max(2, Settings.MinRoomCount);
+            int maxRoomCount = Math.Max(minRoomCount + 1, Settings.MaxRoomCount);
+            int roomCount = _random.Next(minRoomCount, maxRoomCount);
 
             for (int i = 0; i < roomCount; i++)
             {
@@ -193,26 +223,26 @@ namespace TwinStickShooter.Core
                 
                 if (i == 0) // La habitación de spawn siempre es muy pequeña
                 {
-                    roomWidth = _random.Next(GameConstants.SpawnRoomMinWidth, GameConstants.SpawnRoomMaxWidth);
-                    roomHeight = _random.Next(GameConstants.SpawnRoomMinWidth, GameConstants.SpawnRoomMaxWidth);
+                    roomWidth = _random.Next(Settings.SpawnRoomMinWidth, Settings.SpawnRoomMaxWidth);
+                    roomHeight = _random.Next(Settings.SpawnRoomMinWidth, Settings.SpawnRoomMaxWidth);
                 }
                 else
                 {
                     // Habitaciones más grandes para el resto del mapa
-                    if (_random.NextDouble() < GameConstants.MediumRoomProbability) // Probabilidad de habitación mediana
+                    if (_random.NextDouble() < Settings.MediumRoomProbability) // Probabilidad de habitación mediana
                     {
-                        roomWidth = _random.Next(GameConstants.MediumRoomMinWidth, GameConstants.MediumRoomMaxWidth);
-                        roomHeight = _random.Next(GameConstants.MediumRoomMinWidth, GameConstants.MediumRoomMaxWidth);
+                        roomWidth = _random.Next(Settings.MediumRoomMinWidth, Settings.MediumRoomMaxWidth);
+                        roomHeight = _random.Next(Settings.MediumRoomMinWidth, Settings.MediumRoomMaxWidth);
                     }
                     else
                     {
-                        roomWidth = _random.Next(GameConstants.StandardRoomMinWidth, GameConstants.StandardRoomMaxWidth);
-                        roomHeight = _random.Next(GameConstants.StandardRoomMinWidth, GameConstants.StandardRoomMaxWidth);
+                        roomWidth = _random.Next(Settings.StandardRoomMinWidth, Settings.StandardRoomMaxWidth);
+                        roomHeight = _random.Next(Settings.StandardRoomMinWidth, Settings.StandardRoomMaxWidth);
                     }
                 }
 
                 // Intentar colocar la habitación sin solapamientos
-                for (int attempt = 0; attempt < GameConstants.MaxRoomPlacementAttempts; attempt++)
+                for (int attempt = 0; attempt < Settings.MaxRoomPlacementAttempts; attempt++)
                 {
                     int roomX = _random.Next(2, _width - roomWidth - 2);
                     int roomY = _random.Next(2, _height - roomHeight - 2);
@@ -221,10 +251,10 @@ namespace TwinStickShooter.Core
 
                     // Verificar intersección con margen para evitar que se toquen o fusionen
                     Rectangle paddedRoom = new Rectangle(
-                        newRoom.X - GameConstants.RoomPadding, 
-                        newRoom.Y - GameConstants.RoomPadding, 
-                        newRoom.Width + GameConstants.RoomPadding * 2, 
-                        newRoom.Height + GameConstants.RoomPadding * 2);
+                        newRoom.X - Settings.RoomPadding,
+                        newRoom.Y - Settings.RoomPadding,
+                        newRoom.Width + Settings.RoomPadding * 2,
+                        newRoom.Height + Settings.RoomPadding * 2);
                     
                     bool overlaps = false;
                     foreach (var room in rooms)
@@ -281,8 +311,12 @@ namespace TwinStickShooter.Core
                         }
                         else
                         {
+                            if (i > 0 && _random.NextDouble() < Math.Clamp(Settings.CrawlerRoomProbability, 0.0, 1.0))
+                            {
+                                AddCrawlerRoom(grid, newRoom);
+                            }
                             // Agregar islas solo en habitaciones grandes y no en la de spawn
-                            if (i > 0 && roomWidth >= GameConstants.IslandMinRoomSize && roomHeight >= GameConstants.IslandMinRoomSize)
+                            else if (i > 0 && roomWidth >= GameConstants.IslandMinRoomSize && roomHeight >= GameConstants.IslandMinRoomSize)
                             {
                                 AddIslandsToRoom(grid, newRoom);
                             }
@@ -302,7 +336,7 @@ namespace TwinStickShooter.Core
 
         private RoomTemplateData SelectTemplate(Rectangle room)
         {
-            if (!GameConstants.UseRoomTemplates || _roomTemplates == null || _roomTemplates.Count == 0)
+            if (!Settings.UseRoomTemplates || _roomTemplates == null || _roomTemplates.Count == 0)
             {
                 return null;
             }
@@ -338,6 +372,49 @@ namespace TwinStickShooter.Core
                     grid[ix + 1, iy] = 1;
                     grid[ix, iy + 1] = 1;
                     grid[ix + 1, iy + 1] = 1;
+                }
+            }
+        }
+
+        private void AddCrawlerRoom(int[,] grid, Rectangle room)
+        {
+            for (int x = room.X; x < room.X + room.Width; x++)
+            {
+                for (int y = room.Y; y < room.Y + room.Height; y++)
+                {
+                    grid[x, y] = 1;
+                }
+            }
+
+            Point center = room.Center;
+            grid[center.X, center.Y] = 0;
+
+            long totalSteps = (long)Math.Max(0, Settings.CrawlerStepsPerRoomCell) * room.Width * room.Height;
+            if (totalSteps == 0)
+            {
+                return;
+            }
+
+            int walkerCount = _random.Next(1, 4);
+            Point[] directions =
+            {
+                new Point(0, 1),
+                new Point(1, 0),
+                new Point(0, -1),
+                new Point(-1, 0),
+            };
+
+            for (int walker = 0; walker < walkerCount; walker++)
+            {
+                Point position = center;
+                long walkerSteps = totalSteps / walkerCount + (walker < totalSteps % walkerCount ? 1 : 0);
+                for (long step = 0; step < walkerSteps; step++)
+                {
+                    Point direction = directions[_random.Next(directions.Length)];
+                    position = new Point(
+                        Math.Clamp(position.X + direction.X, room.X, room.X + room.Width - 1),
+                        Math.Clamp(position.Y + direction.Y, room.Y, room.Y + room.Height - 1));
+                    grid[position.X, position.Y] = 0;
                 }
             }
         }
@@ -389,6 +466,7 @@ namespace TwinStickShooter.Core
             // Conectar aristas del MST
             foreach (Edge edge in mstEdges)
             {
+                RoomConnections.Add((edge.From, edge.To));
                 ConnectRooms(grid, roomCenters[edge.From], roomCenters[edge.To]);
             }
 
@@ -396,11 +474,12 @@ namespace TwinStickShooter.Core
             bool addLoops = true;
             if (addLoops && remainingEdges.Count > 0)
             {
-                int loopsToAdd = Math.Min(_random.Next(GameConstants.MinExtraLoops, GameConstants.MaxExtraLoops), remainingEdges.Count);
+                int loopsToAdd = Math.Min(_random.Next(Settings.MinExtraLoops, Settings.MaxExtraLoops), remainingEdges.Count);
                 for (int i = 0; i < loopsToAdd; i++)
                 {
                     int index = _random.Next(remainingEdges.Count);
                     Edge extra = remainingEdges[index];
+                    RoomConnections.Add((extra.From, extra.To));
                     ConnectRooms(grid, roomCenters[extra.From], roomCenters[extra.To]);
                     remainingEdges.RemoveAt(index);
                 }
@@ -429,6 +508,50 @@ namespace TwinStickShooter.Core
         public bool IsMapTraversable(int[,] grid, Point start, Point end)
         {
             return BFS(grid, start, end);
+        }
+
+        public int FindPathDistance(int[,] grid, Point start, Point end)
+        {
+            if (!IsInsideGrid(start) || !IsInsideGrid(end) || grid[start.X, start.Y] != 0 || grid[end.X, end.Y] != 0)
+            {
+                return -1;
+            }
+
+            int[,] distances = new int[_width, _height];
+            for (int x = 0; x < _width; x++)
+            {
+                for (int y = 0; y < _height; y++) distances[x, y] = -1;
+            }
+
+            Queue<Point> queue = new Queue<Point>();
+            queue.Enqueue(start);
+            distances[start.X, start.Y] = 0;
+            Point[] directions = { new Point(0, 1), new Point(1, 0), new Point(0, -1), new Point(-1, 0) };
+
+            while (queue.Count > 0)
+            {
+                Point current = queue.Dequeue();
+                if (current == end) return distances[current.X, current.Y];
+
+                foreach (Point direction in directions)
+                {
+                    int nextX = current.X + direction.X;
+                    int nextY = current.Y + direction.Y;
+                    if (nextX >= 0 && nextX < _width && nextY >= 0 && nextY < _height &&
+                        grid[nextX, nextY] == 0 && distances[nextX, nextY] < 0)
+                    {
+                        distances[nextX, nextY] = distances[current.X, current.Y] + 1;
+                        queue.Enqueue(new Point(nextX, nextY));
+                    }
+                }
+            }
+
+            return -1;
+        }
+
+        private bool IsInsideGrid(Point point)
+        {
+            return point.X >= 0 && point.X < _width && point.Y >= 0 && point.Y < _height;
         }
 
         /// <summary>

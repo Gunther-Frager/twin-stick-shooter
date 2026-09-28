@@ -68,6 +68,7 @@ namespace TwinStickShooter.Core
             {')', new uint[]{0x00, 0x41, 0x22, 0x1C, 0x00}},
             {'/', new uint[]{0x20, 0x10, 0x08, 0x04, 0x02}},
             {'-', new uint[]{0x08, 0x08, 0x08, 0x08, 0x08}},
+            {'*', new uint[]{0x14, 0x08, 0x3E, 0x08, 0x14}},
             {' ', new uint[]{0x00, 0x00, 0x00, 0x00, 0x00}},
         };
 
@@ -99,6 +100,26 @@ namespace TwinStickShooter.Core
                 DrawString(_messages[i], new Vector2(Padding + 5, Padding + 5 + (i * LineHeight)), Color.LimeGreen);
             }
 
+            _spriteBatch.End();
+        }
+
+        public void DrawDeveloperPanel(IReadOnlyList<string> lines)
+        {
+            if (lines == null || lines.Count == 0) return;
+
+            const int panelWidth = 440;
+            const int lineHeight = 12;
+            int visibleLines = Math.Min(lines.Count, 18);
+            int x = GameConstants.ScreenWidth - panelWidth - Padding;
+            int height = visibleLines * lineHeight + Padding * 2;
+
+            _spriteBatch.Begin();
+            _spriteBatch.Draw(_pixel, new Rectangle(x, Padding, panelWidth, height), new Color(0, 0, 0, 220));
+            for (int i = 0; i < visibleLines; i++)
+            {
+                Color color = i == 0 ? Color.Cyan : Color.White;
+                DrawString(lines[i], new Vector2(x + Padding, Padding + 5 + i * lineHeight), color);
+            }
             _spriteBatch.End();
         }
 

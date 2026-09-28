@@ -46,7 +46,18 @@ namespace TwinStickShooter
         private float _fpsTimer;
         private int _frameCount;
         private bool _previousF3Down;
+        private bool _previousF4Down;
+        private bool _previousF5Down;
+        private bool _previousF6Down;
+        private bool _previousUpDown;
+        private bool _previousDownDown;
+        private bool _previousLeftDown;
+        private bool _previousRightDown;
+        private bool _developerPanelOpen;
+        private int _developerPanelSelection;
         private bool _combatTestSceneActive;
+        private bool _levelCompleted;
+        private bool _exitWaitingMessageShown;
 
         public Game1()
         {
@@ -69,7 +80,6 @@ namespace TwinStickShooter
         {
             InitializeManagers();
             InitializeLevel();
-            InitializePlayers();
 
             // Contar paredes para depuración
             int wallCount = CountWalls();
@@ -112,6 +122,30 @@ namespace TwinStickShooter
                 }
             }
             _previousF3Down = f3Down;
+
+            bool f4Down = keyboardState.IsKeyDown(Keys.F4);
+            if (f4Down && !_previousF4Down) _developerPanelOpen = !_developerPanelOpen;
+            _previousF4Down = f4Down;
+
+            bool f5Down = keyboardState.IsKeyDown(Keys.F5);
+            if (_developerPanelOpen && f5Down && !_previousF5Down) LoadNormalScene();
+            _previousF5Down = f5Down;
+
+            bool f6Down = keyboardState.IsKeyDown(Keys.F6);
+            if (_developerPanelOpen && f6Down && !_previousF6Down)
+            {
+                _levelManager.MapGenerator.Settings.Seed = new Random().Next(1, int.MaxValue);
+                LoadNormalScene();
+            }
+            _previousF6Down = f6Down;
+
+            if (_developerPanelOpen)
+            {
+                UpdateDeveloperPanelInput(keyboardState);
+                base.Update(gameTime);
+                return;
+            }
+
             if (keyboardState.IsKeyDown(Keys.F1))
             {
                 SetGameMode(GameState.SinglePlayer);
@@ -127,10 +161,18 @@ namespace TwinStickShooter
                 if (_players[i].IsActive && _inputManager.GetState(i).IsConnected)
                 {
                     // Verifica si el jugador ha alcanzado el marcador de salida
-                    if (_levelManager.CheckExitReached(_players[i].Position))
+                    if (!_levelCompleted && _levelManager.CheckExitReached(_players[i].Position))
                     {
-                        SetDebugMessage("¡Nivel completado!");
-                        // Aquí puedes agregar lógica adicional para finalizar el nivel
+                        if (_enemyManager.ActiveCount == 0 && _spawnerManager.ActiveCount == 0)
+                        {
+                            _levelCompleted = true;
+                            SetDebugMessage("Nivel completado");
+                        }
+                        else if (!_exitWaitingMessageShown)
+                        {
+                            _exitWaitingMessageShown = true;
+                            SetDebugMessage("Elimina enemigos y generadores para abrir la salida");
+                        }
                     }
                 }
             }
@@ -247,6 +289,10 @@ namespace TwinStickShooter
 
             // Dibujar la consola de depuración
             _debugConsole.Draw(gameTime);
+            if (_developerPanelOpen)
+            {
+                _debugConsole.DrawDeveloperPanel(BuildDeveloperPanelLines());
+            }
 
             base.Draw(gameTime);
         }
@@ -353,34 +399,6 @@ namespace TwinStickShooter
         }
 
         /// <summary>
-        /// Spawnea enemigos de prueba de tipos configurables alrededor de un punto base.
-        /// Sirve para validar comportamientos sin sobre-diseñar la infraestructura.
-        /// </summary>
-        private void SpawnDebugEnemies(SpawnSpec[] specs, Vector2 basePosition)
-        {
-            foreach (SpawnSpec spec in specs)
-            {
-                Vector2 candidate = basePosition + spec.Offset;
-                if (TryFindValidSpawnPosition(candidate, GameConstants.EnemyRadius, out Vector2 safePosition))
-                {
-                    _enemyManager.Spawn(safePosition, Vector2.Zero, spec.Type);
-                }
-            }
-        }
-
-        private readonly struct SpawnSpec
-        {
-            public SpawnSpec(EnemyType type, Vector2 offset)
-            {
-                Type = type;
-                Offset = offset;
-            }
-
-            public EnemyType Type { get; }
-            public Vector2 Offset { get; }
-        }
-
-        /// <summary>
         /// Cuenta cuántas celdas del LevelManager están marcadas como paredes.
         /// </summary>
         private int CountWalls()
@@ -405,10 +423,7 @@ namespace TwinStickShooter
         /// </summary>
         public void GenerateProceduralMap()
         {
-            MapLoader.GenerateProceduralMap(_levelManager);
-            _arenaRenderer.RebuildGeometry();
-            int wallCount = CountWalls();
-            SetDebugMessage($"Mapa generado: {wallCount} colisiones");
+            LoadNormalScene();
         }
 
         /// <summary>
@@ -452,6 +467,8 @@ namespace TwinStickShooter
         private void LoadCombatTestScene()
         {
             _combatTestSceneActive = true;
+            _levelCompleted = false;
+            _exitWaitingMessageShown = false;
             _levelManager.ConfigureCombatTestArena();
             _spawnerManager.Reset();
             _enemyManager.Clear();
@@ -479,172 +496,156 @@ namespace TwinStickShooter
 
         private void LoadNormalScene()
         {
-            _combatTestSceneActive = false;
-            _spawnerManager.Reset();
-            _enemyManager.Clear();
-            MapLoader.GenerateProceduralMap(_levelManager);
-            InitializePlayers();
-            Console.WriteLine($"[Game1] Spawns de plantilla: {_levelManager.MapGenerator.RoomEnemySpawnPoints.Count}");
-            SpawnTestEnemies();
-            _arenaRenderer?.RebuildGeometry();
-            SetDebugMessage("Mapa normal: F3 activa escena de combate");
-        }
-
-        /// <summary>
-        /// Spawnea enemigos de prueba en posiciones válidas dentro del mapa.
-        /// </summary>
-        private void SpawnTestEnemies()
-        {
-            if (!GameConstants.UseRoomTemplates)
+            try
             {
-                // Comportamiento original (hardcodeado)
-                Vector2 spawnPosition = _levelManager.GetSpawnPosition();
-                Vector2[] enemyPositions = 
-                {
-                    spawnPosition + new Vector2(50, 50),
-                    spawnPosition + new Vector2(100, 100)
-                };
-
-                for (int i = 0; i < 2; i++)
-                {
-                    Vector2 position = enemyPositions[i];
-                    if (_levelManager.IsPlayableAndWalkable(position, GameConstants.EnemyRadius))
-                    {
-                        _enemyManager.Spawn(position, new Vector2(10f, 10f));
-                    }
-                    else
-                    {
-                        if (TryFindValidSpawnPosition(position, GameConstants.EnemyRadius, out Vector2 alternativePosition))
-                        {
-                            _enemyManager.Spawn(alternativePosition, new Vector2(10f, 10f));
-                        }
-                    }
-                }
-
-                // Fallback de depuración para mapas generados sin plantillas.
-                SpawnDebugEnemies(new[]
-                {
-                    new SpawnSpec(EnemyType.Roamer, new Vector2(150f, 150f)),
-                    new SpawnSpec(EnemyType.Roamer, new Vector2(210f, 120f)),
-                    new SpawnSpec(EnemyType.Swarmer, new Vector2(260f, 180f)),
-                    new SpawnSpec(EnemyType.Turret, new Vector2(120f, 80f))
-                }, spawnPosition + new Vector2(100f, 100f));
+                _levelManager.GenerateProceduralMap();
+            }
+            catch (InvalidOperationException exception)
+            {
+                SetDebugMessage(exception.Message);
+                if (!_levelManager.HasPrimitiveMapData()) throw;
                 return;
             }
 
-            // Nuevo comportamiento basado en RoomEnemySpawnPoints y salas
-            Console.WriteLine("[Game1] Spawneando enemigos usando plantillas de salas y reglas generales...");
-            
-            // 1. Iterar los puntos de spawn reales de las plantillas (RoomEnemySpawnPoints)
-            if (_levelManager.MapGenerator.RoomEnemySpawns != null && _levelManager.MapGenerator.RoomEnemySpawns.Count > 0)
-            {
-                var spawnPoints = _levelManager.MapGenerator.RoomEnemySpawns;
-                for (int i = 0; i < spawnPoints.Count; i++)
-                {
-                    if (spawnPoints[i].Type != EnemyType.Spawner &&
-                        _enemyManager.ActiveCount >= GameConstants.MaxEnemies)
-                    {
-                        Console.WriteLine($"[Game1] Límite MaxEnemies alcanzado. Se omitieron {spawnPoints.Count - i} spawns de plantillas.");
-                        goto EndSpawning;
-                    }
+            _combatTestSceneActive = false;
+            _levelCompleted = false;
+            _exitWaitingMessageShown = false;
+            _spawnerManager.Reset();
+            _enemyManager.Clear();
+            InitializePlayers();
+            Console.WriteLine($"[Game1] Spawns de plantilla: {_levelManager.MapGenerator.RoomEnemySpawnPoints.Count}");
+            SpawnEncounterPlan();
+            _arenaRenderer?.RebuildGeometry();
+            SetDebugMessage($"Mapa seed {_levelManager.MapGenerator.Settings.Seed}, ruta {_levelManager.MapGenerator.SpawnExitPathLength}");
+        }
 
-                    Vector2 worldPos = new Vector2(spawnPoints[i].Position.X, spawnPoints[i].Position.Y);
-                    float entityRadius = spawnPoints[i].Type == EnemyType.Spawner
-                        ? GameConstants.SpawnerRadius
-                        : GameConstants.EnemyRadius;
-                    if (_levelManager.IsPlayableAndWalkable(worldPos, entityRadius))
-                    {
-                        RegisterTemplateSpawn(worldPos, spawnPoints[i].Type);
-                    }
-                    else
-                    {
-                        if (TryFindValidSpawnPosition(worldPos, entityRadius, out Vector2 validPos))
-                        {
-                            RegisterTemplateSpawn(validPos, spawnPoints[i].Type);
-                        }
-                    }
+        private void SpawnEncounterPlan()
+        {
+            MapGenerator generator = _levelManager.MapGenerator;
+            IList<RoomTemplateData.EnemySpawn> templateSpawns = generator.RoomEnemySpawns;
+            for (int i = 0; i < templateSpawns.Count; i++)
+            {
+                RoomTemplateData.EnemySpawn spawn = templateSpawns[i];
+                Vector2 worldPosition = new Vector2(spawn.Position.X, spawn.Position.Y);
+                float radius = spawn.Type == EnemyType.Spawner
+                    ? GameConstants.SpawnerRadius
+                    : GameConstants.EnemyRadius;
+                if (_levelManager.IsPlayableAndWalkable(worldPosition, radius))
+                {
+                    RegisterTemplateSpawn(worldPosition, spawn.Type);
                 }
             }
 
-            // TODO: remover cuando el sistema de spawns por plantilla (Etapa 5) esté listo.
-            SpawnDebugEnemies(new[]
+            IReadOnlyList<EncounterSpawn> plan = EncounterDirector.Plan(
+                _levelManager.GetCollisionGridSnapshot(),
+                generator.Rooms,
+                generator.SpawnPoint,
+                GameConstants.GridCellSize,
+                templateSpawns,
+                generator.Settings);
+            for (int i = 0; i < plan.Count; i++)
             {
-                new SpawnSpec(EnemyType.Roamer, new Vector2(200f, 200f)),
-                new SpawnSpec(EnemyType.Roamer, new Vector2(260f, 160f)),
-                new SpawnSpec(EnemyType.Swarmer, new Vector2(210f, 240f)),
-                new SpawnSpec(EnemyType.Turret, new Vector2(120f, 80f))
-            }, _levelManager.GetSpawnPosition());
-
-            // 2. Regla para el resto (salas sin plantilla):
-            // 1 enemigo cada N celdas² de área de sala, colocado en un punto random walkable dentro del Rectangle de la sala.
-            if (_levelManager.MapGenerator.Rooms != null)
-            {
-                Random rand = new Random(42);
-                var rooms = _levelManager.MapGenerator.Rooms;
-                for (int i = 0; i < rooms.Count; i++)
+                EncounterSpawn spawn = plan[i];
+                Vector2 worldPosition = new Vector2(spawn.Position.X, spawn.Position.Y);
+                if (_levelManager.IsPlayableAndWalkable(worldPosition, GameConstants.EnemyRadius))
                 {
-                    var room = rooms[i];
-                    int area = room.Width * room.Height;
-                    if (area <= 0) continue;
-
-                    int enemyCount = area / 300;
-                    if (enemyCount < 1 && area > 150) enemyCount = 1;
-
-                    for (int c = 0; c < enemyCount; c++)
-                    {
-                        if (_enemyManager.ActiveCount >= GameConstants.MaxEnemies)
-                        {
-                            int remainingInRoom = enemyCount - c;
-                            int remainingInOtherRooms = 0;
-                            for (int j = i + 1; j < rooms.Count; j++)
-                            {
-                                int a = rooms[j].Width * rooms[j].Height;
-                                if (a <= 0) continue;
-                                int ec = a / 300;
-                                if (ec < 1 && a > 150) ec = 1;
-                                remainingInOtherRooms += ec;
-                            }
-                            Console.WriteLine($"[Game1] Límite MaxEnemies alcanzado. Se omitieron {remainingInRoom + remainingInOtherRooms} spawns de regla de área.");
-                            goto EndSpawning;
-                        }
-
-                        for (int attempt = 0; attempt < 10; attempt++)
-                        {
-                            int rx = rand.Next(room.X + 1, room.X + room.Width - 1);
-                            int ry = rand.Next(room.Y + 1, room.Y + room.Height - 1);
-                            
-                            Vector2 worldPos = _levelManager.GridToWorld(new Point(rx, ry));
-                            
-                            if (_levelManager.IsPlayableAndWalkable(worldPos, GameConstants.EnemyRadius))
-                            {
-                                // Tarea 2: Verificar distancia a RoomEnemySpawnPoints
-                                bool tooClose = false;
-                                if (_levelManager.MapGenerator.RoomEnemySpawnPoints != null)
-                                {
-                                    float minDistanceSq = (GameConstants.EnemyRadius * 3) * (GameConstants.EnemyRadius * 3);
-                                    foreach (var sp in _levelManager.MapGenerator.RoomEnemySpawnPoints)
-                                    {
-                                        if (Vector2.DistanceSquared(worldPos, sp) < minDistanceSq)
-                                        {
-                                            tooClose = true;
-                                            break;
-                                        }
-                                    }
-                                }
-
-                                if (!tooClose)
-                                {
-                                    _enemyManager.Spawn(worldPos, new Vector2(10f, 10f));
-                                    break;
-                                }
-                            }
-                        }
-                    }
+                    _enemyManager.Spawn(worldPosition, Vector2.Zero, spawn.Type);
                 }
             }
 
-        EndSpawning:
             Console.WriteLine($"[Game1] Spawn total: {_enemyManager.ActiveCount}/{GameConstants.MaxEnemies}");
+        }
+
+        private void UpdateDeveloperPanelInput(KeyboardState keyboardState)
+        {
+            bool upDown = keyboardState.IsKeyDown(Keys.Up);
+            bool downDown = keyboardState.IsKeyDown(Keys.Down);
+            bool leftDown = keyboardState.IsKeyDown(Keys.Left);
+            bool rightDown = keyboardState.IsKeyDown(Keys.Right);
+            if (upDown && !_previousUpDown) _developerPanelSelection = (_developerPanelSelection + 12) % 13;
+            if (downDown && !_previousDownDown) _developerPanelSelection = (_developerPanelSelection + 1) % 13;
+            if (leftDown && !_previousLeftDown) AdjustDeveloperSetting(-1);
+            if (rightDown && !_previousRightDown) AdjustDeveloperSetting(1);
+            _previousUpDown = upDown;
+            _previousDownDown = downDown;
+            _previousLeftDown = leftDown;
+            _previousRightDown = rightDown;
+        }
+
+        private void AdjustDeveloperSetting(int direction)
+        {
+            MapGenerationSettings settings = _levelManager.MapGenerator.Settings;
+            switch (_developerPanelSelection)
+            {
+                case 0: settings.MinimumSpawnExitPathLength = MathHelper.Clamp(settings.MinimumSpawnExitPathLength + direction, 1, 80); break;
+                case 1: settings.MaxRoomCount = Math.Max(settings.MinRoomCount + 1, MathHelper.Clamp(settings.MaxRoomCount + direction, 3, 20)); break;
+                case 2: settings.CrawlerRoomProbability = MathHelper.Clamp((float)(settings.CrawlerRoomProbability + direction * 0.05), 0f, 1f); break;
+                case 3: settings.CrawlerStepsPerRoomCell = MathHelper.Clamp(settings.CrawlerStepsPerRoomCell + direction, 0, 10); break;
+                case 4: settings.EncounterSpawnSafeDistance = MathHelper.Clamp(settings.EncounterSpawnSafeDistance + direction, 0, 20); break;
+                case 5: settings.EncounterDifficultyBudget = MathHelper.Clamp(settings.EncounterDifficultyBudget + direction, 0, 100); break;
+                case 6: settings.EncounterMinGroupSize = MathHelper.Clamp(settings.EncounterMinGroupSize + direction, 1, settings.EncounterMaxGroupSize); break;
+                case 7: settings.EncounterMaxGroupSize = MathHelper.Clamp(settings.EncounterMaxGroupSize + direction, settings.EncounterMinGroupSize, 12); break;
+                case 8: settings.EncounterClusterRadius = MathHelper.Clamp(settings.EncounterClusterRadius + direction, 0, 12); break;
+                case 9: settings.EncounterSwarmerCost = MathHelper.Clamp(settings.EncounterSwarmerCost + direction, 1, 20); break;
+                case 10: settings.EncounterRoamerCost = MathHelper.Clamp(settings.EncounterRoamerCost + direction, 1, 20); break;
+                case 11: settings.EncounterTurretCost = MathHelper.Clamp(settings.EncounterTurretCost + direction, 1, 20); break;
+                case 12: settings.UseRoomTemplates = !settings.UseRoomTemplates; break;
+            }
+        }
+
+        private List<string> BuildDeveloperPanelLines()
+        {
+            MapGenerator generator = _levelManager.MapGenerator;
+            MapGenerationSettings settings = generator.Settings;
+            string[] values =
+            {
+                $"RUTA MIN CELDAS: {settings.MinimumSpawnExitPathLength}",
+                $"SALAS MAX: {settings.MaxRoomCount}",
+                $"WALKER PROB: {settings.CrawlerRoomProbability:0.00}",
+                $"WALKER PASOS: {settings.CrawlerStepsPerRoomCell}",
+                $"SAFE RADIO CELDAS: {settings.EncounterSpawnSafeDistance}",
+                $"PRESUPUESTO SALA: {settings.EncounterDifficultyBudget}",
+                $"GRUPO MIN: {settings.EncounterMinGroupSize}",
+                $"GRUPO MAX: {settings.EncounterMaxGroupSize}",
+                $"RADIO CLUSTER CELDAS: {settings.EncounterClusterRadius}",
+                $"COSTO SWARMER: {settings.EncounterSwarmerCost}",
+                $"COSTO ROAMER: {settings.EncounterRoamerCost}",
+                $"COSTO TURRET: {settings.EncounterTurretCost}",
+                $"PLANTILLAS: {(settings.UseRoomTemplates ? "ON" : "OFF")}",
+            };
+            List<string> lines = new List<string>
+            {
+                "PANEL DEV F4 CERRAR F5 REGENERAR F6 NUEVA SEED",
+                "ARRIBA ABAJO ELEGIR IZQ DER CAMBIAR",
+                $"SEED {settings.Seed} RUTA {generator.SpawnExitPathLength} CELDAS SALAS {generator.Rooms.Count}",
+            };
+            for (int i = 0; i < values.Length; i++)
+            {
+                lines.Add($"{(i == _developerPanelSelection ? "* " : "  ")}{values[i]}");
+            }
+            lines.Add(GetDeveloperSettingHelp(_developerPanelSelection));
+
+            return lines;
+        }
+
+        private static string GetDeveloperSettingHelp(int selection)
+        {
+            switch (selection)
+            {
+                case 0: return "MINIMO BFS EN CELDAS INICIO A SALIDA. SI NO CUMPLE, NO REGENERA.";
+                case 1: return "LIMITE SUPERIOR DE SALAS. EL CAMBIO SE APLICA CON F5.";
+                case 2: return "CHANCE DE WALKERS SOLO EN SALAS SIN PLANTILLA.";
+                case 3: return "PASOS DE WALKERS POR CELDA. MAS PASOS ABREN MAS SUELO.";
+                case 4: return "RADIO EN CELDAS SIN SPAWNS ALREDEDOR DEL INICIO.";
+                case 5: return "PUNTOS POR SALA. NO EQUIVALE A CANTIDAD DE ENEMIGOS.";
+                case 6: return "MINIMO EN CADA GRUPO SI CABEN EL RADIO Y EL PRESUPUESTO.";
+                case 7: return "MAXIMO POR GRUPO. LA CANTIDAD REAL VARIA ENTRE MIN Y MAX.";
+                case 8: return "DISTANCIA MAXIMA DESDE CENTRO DEL GRUPO EN CELDAS.";
+                case 9:
+                case 10:
+                case 11: return "COSTO MENOR PERMITE MAS UNIDADES POR EL MISMO PRESUPUESTO.";
+                default: return "ON USA PREFABS JSON Y SUS SPAWNS. OFF USA FORMAS PROCEDURALES.";
+            }
         }
 
         private void RegisterTemplateSpawn(Vector2 position, EnemyType type)
