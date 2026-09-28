@@ -4,6 +4,43 @@ using Microsoft.Xna.Framework;
 
 namespace TwinStickShooter.Core
 {
+    public class MapRoundedPoly
+    {
+        public List<Edge> Edges { get; set; } = new List<Edge>();
+
+        public abstract class Edge
+        {
+        }
+
+        public class Segment : Edge
+        {
+            public Vector2 A { get; set; }
+            public Vector2 B { get; set; }
+
+            public Segment(Vector2 a, Vector2 b)
+            {
+                A = a;
+                B = b;
+            }
+        }
+
+        public class Arc : Edge
+        {
+            public Vector2 Center { get; set; }
+            public float Radius { get; set; }
+            public float StartAngle { get; set; }
+            public float EndAngle { get; set; }
+
+            public Arc(Vector2 center, float radius, float startAngle, float endAngle)
+            {
+                Center = center;
+                Radius = radius;
+                StartAngle = startAngle;
+                EndAngle = endAngle;
+            }
+        }
+    }
+
     public class MapCircle
     {
         public Vector2 Center { get; set; }

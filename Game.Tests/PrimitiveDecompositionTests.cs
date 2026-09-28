@@ -6,7 +6,7 @@ namespace TwinStickShooter.Tests;
 public class PrimitiveDecompositionTests
 {
     [Fact]
-    public void PrimitiveGrid_ShouldPartitionTShapeIntoTwoRectangles()
+    public void PrimitiveGrid_ShouldRepresentTShapeAsRoundedContour()
     {
         var level = new LevelManager(6, 6, 16);
         level.SetCollision(2, 1, true);
@@ -16,8 +16,8 @@ public class PrimitiveDecompositionTests
 
         level.RebuildPrimitiveMapFromGrid();
 
-        Assert.Single(level.PrimitiveCircles);
-        var capsule = Assert.Single(level.PrimitiveCapsules);
-        Assert.True(capsule.Start.X < capsule.End.X);
+        Assert.Single(level.PrimitiveRoundedPolys);
+        Assert.Empty(level.PrimitiveCircles);
+        Assert.Empty(level.PrimitiveCapsules);
     }
 }

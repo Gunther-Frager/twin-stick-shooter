@@ -91,6 +91,18 @@ namespace TwinStickShooter.Rendering
                 AddCapsule(innerGlowVertices, capsule.Start, capsule.End, capsule.Radius + 2.5f, innerGlowColor, 18);
             }
 
+            foreach (MapRoundedPoly poly in _levelManager.PrimitiveRoundedPolys)
+            {
+                List<Vector2> contour = GetRoundedPolyPoints(poly, 8);
+                AddRoundedPolyOutline(vertices, poly, wallColor, 0f, 8);
+                AddRoundedPolyOutline(outerGlowVertices, poly, outerGlowColor, 6f, 8);
+                AddRoundedPolyOutline(innerGlowVertices, poly, innerGlowColor, 2.5f, 8);
+
+                // TraceContours returns holes as separate, oppositely wound contours; skip their fill rather than bridging them unsafely.
+                if (GetSignedArea(contour) > 0f)
+                    TriangulateContour(fillVertices, contour, wallFillColor);
+            }
+
             // Spawn y salida
             Vector2 spawnPosition = _levelManager.GetSpawnPosition();
             Point spawnPoint = _levelManager.WorldToGrid(spawnPosition);
@@ -227,6 +239,146 @@ namespace TwinStickShooter.Rendering
             vertices.Add(new VertexPositionColor(new Vector3(a, 0), color));
             vertices.Add(new VertexPositionColor(new Vector3(b, 0), color));
             vertices.Add(new VertexPositionColor(new Vector3(c, 0), color));
+        }
+
+        private static void AddRoundedPolyOutline(List<VertexPositionColor> vertices, MapRoundedPoly poly, Color color, float offset, int arcSegments)
+        {
+            float signedArea = GetSignedArea(GetRoundedPolyPoints(poly, arcSegments));
+            bool clockwiseOnScreen = signedArea >= 0f;
+
+            foreach (MapRoundedPoly.Edge edge in poly.Edges)
+            {
+                if (edge is MapRoundedPoly.Segment segment)
+                {
+                    Vector2 direction = segment.B - segment.A;
+                    if (direction.LengthSquared() <= 0.0001f)
+                        continue;
+
+                    direction.Normalize();
+                    Vector2 normal = clockwiseOnScreen
+                        ? new Vector2(direction.Y, -direction.X)
+                        : new Vector2(-direction.Y, direction.X);
+                    AddLine(vertices,
+                        new Vector3(segment.A + normal * offset, 0f),
+                        new Vector3(segment.B + normal * offset, 0f), color);
+                }
+                else if (edge is MapRoundedPoly.Arc arc)
+                {
+                    AddArc(vertices, arc.Center, arc.Radius + offset,
+                        arc.StartAngle, arc.EndAngle, color,
+                        Math.Max(1, (int)Math.Ceiling(Math.Abs(arc.EndAngle - arc.StartAngle) / MathHelper.TwoPi * arcSegments * 4)));
+                }
+            }
+        }
+
+        private static List<Vector2> GetRoundedPolyPoints(MapRoundedPoly poly, int arcSegments)
+        {
+            var points = new List<Vector2>();
+            foreach (MapRoundedPoly.Edge edge in poly.Edges)
+            {
+                if (edge is MapRoundedPoly.Segment segment)
+                {
+                    points.Add(segment.A);
+                }
+                else if (edge is MapRoundedPoly.Arc arc)
+                {
+                    float sweep = arc.EndAngle - arc.StartAngle;
+                    int segments = Math.Max(1, (int)Math.Ceiling(Math.Abs(sweep) / MathHelper.PiOver2 * arcSegments));
+                    for (int i = 1; i < segments; i++)
+                    {
+                        float angle = arc.StartAngle + sweep * i / segments;
+                        points.Add(arc.Center + new Vector2((float)Math.Cos(angle), (float)Math.Sin(angle)) * arc.Radius);
+                    }
+                }
+            }
+
+            return points;
+        }
+
+        private static float GetSignedArea(List<Vector2> points)
+        {
+            float twiceArea = 0f;
+            for (int i = 0; i < points.Count; i++)
+            {
+                Vector2 current = points[i];
+                Vector2 next = points[(i + 1) % points.Count];
+                twiceArea += current.X * next.Y - next.X * current.Y;
+            }
+
+            return twiceArea * 0.5f;
+        }
+
+        private static void TriangulateContour(List<VertexPositionColor> vertices, List<Vector2> points, Color color)
+        {
+            if (points.Count < 3)
+                return;
+
+            float area = GetSignedArea(points);
+            if (Math.Abs(area) <= 0.0001f)
+                return;
+
+            var remaining = new List<int>(points.Count);
+            for (int i = 0; i < points.Count; i++)
+                remaining.Add(i);
+
+            float winding = Math.Sign(area);
+            int attemptsWithoutEar = 0;
+            while (remaining.Count > 3 && attemptsWithoutEar < remaining.Count)
+            {
+                bool clippedEar = false;
+                for (int i = 0; i < remaining.Count; i++)
+                {
+                    int previousIndex = remaining[(i + remaining.Count - 1) % remaining.Count];
+                    int currentIndex = remaining[i];
+                    int nextIndex = remaining[(i + 1) % remaining.Count];
+                    Vector2 previous = points[previousIndex];
+                    Vector2 current = points[currentIndex];
+                    Vector2 next = points[nextIndex];
+
+                    if (Cross(current - previous, next - current) * winding <= 0.0001f)
+                        continue;
+
+                    bool containsVertex = false;
+                    foreach (int candidateIndex in remaining)
+                    {
+                        if (candidateIndex == previousIndex || candidateIndex == currentIndex || candidateIndex == nextIndex)
+                            continue;
+
+                        if (PointInTriangle(points[candidateIndex], previous, current, next, winding))
+                        {
+                            containsVertex = true;
+                            break;
+                        }
+                    }
+
+                    if (containsVertex)
+                        continue;
+
+                    AddTriangle(vertices, previous, current, next, color);
+                    remaining.RemoveAt(i);
+                    clippedEar = true;
+                    attemptsWithoutEar = 0;
+                    break;
+                }
+
+                if (!clippedEar)
+                    attemptsWithoutEar++;
+            }
+
+            if (remaining.Count == 3)
+                AddTriangle(vertices, points[remaining[0]], points[remaining[1]], points[remaining[2]], color);
+        }
+
+        private static bool PointInTriangle(Vector2 point, Vector2 a, Vector2 b, Vector2 c, float winding)
+        {
+            return Cross(b - a, point - a) * winding >= -0.0001f &&
+                Cross(c - b, point - b) * winding >= -0.0001f &&
+                Cross(a - c, point - c) * winding >= -0.0001f;
+        }
+
+        private static float Cross(Vector2 a, Vector2 b)
+        {
+            return a.X * b.Y - a.Y * b.X;
         }
 
         public void RebuildGeometry()

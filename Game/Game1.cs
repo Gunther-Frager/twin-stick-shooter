@@ -408,6 +408,7 @@ namespace TwinStickShooter
         {
             _inputManager = new InputManager();
             _levelManager = new LevelManager(GameConstants.GridWidth, GameConstants.GridHeight, GameConstants.GridCellSize);
+            _levelManager.UseRoundedContours = true;
             _bulletManager = new BulletManager(_levelManager);
             _enemyBulletManager = new EnemyBulletManager(_levelManager);
             _particleSystem = new ParticleSystem(GameConstants.MaxParticles);

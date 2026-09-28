@@ -39,7 +39,7 @@ public class CollisionWorldTests
     }
 
     [Fact]
-    public void PrimitiveGrid_ShouldCreateCapsulesForConnectedRuns()
+    public void PrimitiveGrid_ShouldCreateRoundedPolyForConnectedRunAndCircleForIsolatedCell()
     {
         var level = new LevelManager(5, 1, 16);
         level.SetCollision(0, 0, true);
@@ -49,7 +49,8 @@ public class CollisionWorldTests
 
         level.RebuildPrimitiveMapFromGrid();
 
-        Assert.Contains(level.PrimitiveCapsules, c => c.Start.X < c.End.X);
+        Assert.Single(level.PrimitiveRoundedPolys);
+        Assert.Empty(level.PrimitiveCapsules);
         Assert.Contains(level.PrimitiveCircles, c => c.Center.X > 60f && c.Center.X < 90f);
     }
 }

@@ -11,12 +11,14 @@ namespace TwinStickShooter.Core
     /// </summary>
     public class LevelManager
     {
+        private const float PenetrationSeparationEpsilon = 0.001f;
         private readonly int _gridWidth;
         private readonly int _gridHeight;
         private readonly int _cellSize;
         private readonly bool[,] _collisionGrid;
         private readonly List<MapCircle> _primitiveCircles = new List<MapCircle>();
         private readonly List<MapCapsule> _primitiveCapsules = new List<MapCapsule>();
+        private readonly List<MapRoundedPoly> _primitiveRoundedPolys = new List<MapRoundedPoly>();
         private bool _primitiveMapInitialized;
         private MapGenerator _mapGenerator;
         public MapGenerator MapGenerator => _mapGenerator;
@@ -39,6 +41,8 @@ namespace TwinStickShooter.Core
 
         public IReadOnlyList<MapCircle> PrimitiveCircles => _primitiveCircles;
         public IReadOnlyList<MapCapsule> PrimitiveCapsules => _primitiveCapsules;
+        public bool UseRoundedContours { get; set; } = true;
+        public IReadOnlyList<MapRoundedPoly> PrimitiveRoundedPolys => _primitiveRoundedPolys;
         public bool HasPrimitiveMapData() => _primitiveMapInitialized;
 
         /// <summary>
@@ -96,7 +100,84 @@ namespace TwinStickShooter.Core
                 }
             }
 
+            foreach (var poly in _primitiveRoundedPolys)
+            {
+                if (RoundedContour.PenetrationAgainst(poly, position, radius, out _))
+                    return true;
+            }
+
             return false;
+        }
+
+        public bool TryGetPenetration(Vector2 center, float radius, out Vector2 pushOut)
+        {
+            if (!HasPrimitiveMapData())
+            {
+                throw new InvalidOperationException("Primitive map data is not initialized. Call RebuildPrimitiveMapFromGrid or SetPrimitiveMap before checking collisions.");
+            }
+
+            pushOut = Vector2.Zero;
+            float deepestOverlap = 0f;
+
+            foreach (var circle in _primitiveCircles)
+            {
+                float combinedRadius = radius + circle.Radius;
+                Vector2 offset = center - circle.Center;
+                float distanceSquared = offset.LengthSquared();
+                if (distanceSquared >= combinedRadius * combinedRadius)
+                    continue;
+
+                float distance = MathF.Sqrt(distanceSquared);
+                float overlap = combinedRadius - distance;
+                Vector2 candidate = distance > 0.0001f
+                    ? offset * ((overlap + PenetrationSeparationEpsilon) / distance)
+                    : new Vector2(overlap + PenetrationSeparationEpsilon, 0f);
+                if (overlap > deepestOverlap)
+                {
+                    deepestOverlap = overlap;
+                    pushOut = candidate;
+                }
+            }
+
+            foreach (var capsule in _primitiveCapsules)
+            {
+                Vector2 closest = ClosestPointOnSegment(center, capsule.Start, capsule.End);
+                Vector2 offset = center - closest;
+                float distanceSquared = offset.LengthSquared();
+                float combinedRadius = radius + capsule.Radius;
+                if (distanceSquared >= combinedRadius * combinedRadius)
+                    continue;
+
+                float distance = MathF.Sqrt(distanceSquared);
+                float overlap = combinedRadius - distance;
+                Vector2 axis = capsule.End - capsule.Start;
+                Vector2 fallback = axis.LengthSquared() > 0.0001f
+                    ? Vector2.Normalize(new Vector2(-axis.Y, axis.X))
+                    : Vector2.UnitX;
+                Vector2 candidate = distance > 0.0001f
+                    ? offset * ((overlap + PenetrationSeparationEpsilon) / distance)
+                    : fallback * (overlap + PenetrationSeparationEpsilon);
+                if (overlap > deepestOverlap)
+                {
+                    deepestOverlap = overlap;
+                    pushOut = candidate;
+                }
+            }
+
+            foreach (var poly in _primitiveRoundedPolys)
+            {
+                if (!RoundedContour.PenetrationAgainst(poly, center, radius, out Vector2 candidate))
+                    continue;
+
+                float overlap = candidate.Length();
+                if (overlap > deepestOverlap)
+                {
+                    deepestOverlap = overlap;
+                    pushOut = candidate + Vector2.Normalize(candidate) * PenetrationSeparationEpsilon;
+                }
+            }
+
+            return deepestOverlap > 0f;
         }
 
         /// <summary>
@@ -165,6 +246,7 @@ namespace TwinStickShooter.Core
         {
             _primitiveCircles.Clear();
             _primitiveCapsules.Clear();
+            _primitiveRoundedPolys.Clear();
             _primitiveMapInitialized = true;
 
             if (definition == null)
@@ -203,6 +285,7 @@ namespace TwinStickShooter.Core
         {
             _primitiveCircles.Clear();
             _primitiveCapsules.Clear();
+            _primitiveRoundedPolys.Clear();
 
             var visited = new bool[_gridWidth, _gridHeight];
             var queue = new Queue<Point>();
@@ -255,7 +338,18 @@ namespace TwinStickShooter.Core
                         }
                     }
 
-                    BuildRegionPrimitives(region);
+                    if (UseRoundedContours && region.Count > 1)
+                    {
+                        List<List<Vector2>> contours = RoundedContour.TraceContours(
+                            (cellX, cellY) => _collisionGrid[cellX, cellY], region, _cellSize);
+                        float cornerRadius = _cellSize * GameConstants.RoundedContourRadiusScale;
+                        foreach (List<Vector2> contour in contours)
+                            _primitiveRoundedPolys.Add(RoundedContour.RoundCorners(contour, cornerRadius));
+                    }
+                    else
+                    {
+                        BuildRegionPrimitives(region);
+                    }
                 }
             }
 

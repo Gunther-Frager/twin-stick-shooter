@@ -91,6 +91,7 @@ namespace TwinStickShooter.Core
         public const int GridWidth = 30;            // Coincide con el JSON
         public const int GridHeight = 30;           // Coincide con el JSON
         public const int GridCellSize = WorldWidth / GridWidth;  // 2400/30 = 80 píxeles por celda
+        public const float RoundedContourRadiusScale = 0.35f;
         
         // --- Generación de mapas ---
         public const bool UseRoomTemplates = true;
