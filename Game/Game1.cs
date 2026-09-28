@@ -315,27 +315,39 @@ namespace TwinStickShooter
         /// <summary>
         /// Busca una posición válida cerca de la posición original para spawnear entidades.
         /// </summary>
-        private Vector2 FindValidSpawnPosition(Vector2 originalPosition, Vector2 spawnRoomCenter, float radius = GameConstants.PlayerRadius)
+        private bool TryFindValidSpawnPosition(Vector2 originalPosition, float radius, out Vector2 validPosition)
         {
-            // Buscar en un radio creciente alrededor de la posición original
-            for (int searchRadius = 1; searchRadius < 20; searchRadius++)
+            if (_levelManager.IsWalkable(originalPosition, radius))
             {
-                for (int angle = 0; angle < 360; angle += 15)
+                validPosition = originalPosition;
+                return true;
+            }
+
+            Point origin = _levelManager.WorldToGrid(originalPosition);
+            int maxRadius = Math.Max(GameConstants.GridWidth, GameConstants.GridHeight);
+            for (int searchRadius = 1; searchRadius <= maxRadius; searchRadius++)
+            {
+                for (int x = origin.X - searchRadius; x <= origin.X + searchRadius; x++)
                 {
-                    float radians = MathHelper.ToRadians(angle);
-                    Vector2 testPosition = originalPosition + new Vector2(
-                        (float)Math.Cos(radians) * searchRadius * GameConstants.GridCellSize,
-                        (float)Math.Sin(radians) * searchRadius * GameConstants.GridCellSize
-                    );
-                    if (_levelManager.IsWalkable(testPosition, radius))
+                    for (int y = origin.Y - searchRadius; y <= origin.Y + searchRadius; y++)
                     {
-                        return testPosition;
+                        if (x < 0 || x >= GameConstants.GridWidth || y < 0 || y >= GameConstants.GridHeight)
+                        {
+                            continue;
+                        }
+
+                        Vector2 testPosition = _levelManager.GridToWorld(new Point(x, y));
+                        if (_levelManager.IsWalkable(testPosition, radius))
+                        {
+                            validPosition = testPosition;
+                            return true;
+                        }
                     }
                 }
             }
-            // Si no se encuentra una posición válida, hacer clamp hacia el centro de la sala de spawn
-            Console.WriteLine("[Game1] ADVERTENCIA: No se encontró una posición válida para spawnear. Haciendo clamp al centro de la sala.");
-            return spawnRoomCenter;
+
+            validPosition = Vector2.Zero;
+            return false;
         }
 
         /// <summary>
@@ -347,11 +359,7 @@ namespace TwinStickShooter
             foreach (SpawnSpec spec in specs)
             {
                 Vector2 candidate = basePosition + spec.Offset;
-                Vector2 safePosition = _levelManager.IsWalkable(candidate, GameConstants.EnemyRadius)
-                    ? candidate
-                    : FindValidSpawnPosition(candidate, basePosition, GameConstants.EnemyRadius);
-
-                if (_levelManager.IsWalkable(safePosition, GameConstants.EnemyRadius))
+                if (TryFindValidSpawnPosition(candidate, GameConstants.EnemyRadius, out Vector2 safePosition))
                 {
                     _enemyManager.Spawn(safePosition, Vector2.Zero, spec.Type);
                 }
@@ -411,7 +419,7 @@ namespace TwinStickShooter
             _levelManager.UseRoundedContours = true;
             _bulletManager = new BulletManager(_levelManager);
             _enemyBulletManager = new EnemyBulletManager(_levelManager);
-            _particleSystem = new ParticleSystem(GameConstants.MaxParticles);
+            _particleSystem = new ParticleSystem(GameConstants.MaxParticles, _levelManager);
             _enemyManager = new EnemyManager(_levelManager);
             _spawnerManager = new SpawnerManager(GameConstants.MaxSpawners, _enemyManager);
             _camera = new Camera();
@@ -445,14 +453,26 @@ namespace TwinStickShooter
             _levelManager.ConfigureCombatTestArena();
             _spawnerManager.Reset();
             _enemyManager.Clear();
+            InitializePlayers();
 
             Vector2 center = _levelManager.GetSpawnPosition();
-            _enemyManager.Spawn(center + new Vector2(260f, 0f), Vector2.Zero, EnemyType.Swarmer);
-            _enemyManager.Spawn(center + new Vector2(-260f, 0f), Vector2.Zero, EnemyType.Roamer);
-            _enemyManager.Spawn(center + new Vector2(0f, -260f), Vector2.Zero, EnemyType.Turret);
-            _spawnerManager.Register(center + new Vector2(0f, 260f));
+            SpawnCombatTestEnemy(center, new Vector2(260f, 0f), EnemyType.Swarmer);
+            SpawnCombatTestEnemy(center, new Vector2(-260f, 0f), EnemyType.Roamer);
+            SpawnCombatTestEnemy(center, new Vector2(0f, -260f), EnemyType.Turret);
+            if (TryFindValidSpawnPosition(center + new Vector2(0f, 260f), GameConstants.SpawnerRadius, out Vector2 spawnerPosition))
+            {
+                _spawnerManager.Register(spawnerPosition);
+            }
             _arenaRenderer?.RebuildGeometry();
             SetDebugMessage("Escena de combate: F3 reinicia");
+        }
+
+        private void SpawnCombatTestEnemy(Vector2 center, Vector2 offset, EnemyType type)
+        {
+            if (TryFindValidSpawnPosition(center + offset, GameConstants.EnemyRadius, out Vector2 position))
+            {
+                _enemyManager.Spawn(position, Vector2.Zero, type);
+            }
         }
 
         private void LoadNormalScene()
@@ -461,6 +481,7 @@ namespace TwinStickShooter
             _spawnerManager.Reset();
             _enemyManager.Clear();
             MapLoader.GenerateProceduralMap(_levelManager);
+            InitializePlayers();
             Console.WriteLine($"[Game1] Spawns de plantilla: {_levelManager.MapGenerator.RoomEnemySpawnPoints.Count}");
             SpawnTestEnemies();
             _arenaRenderer?.RebuildGeometry();
@@ -491,8 +512,10 @@ namespace TwinStickShooter
                     }
                     else
                     {
-                        Vector2 alternativePosition = FindValidSpawnPosition(position, spawnPosition);
-                        _enemyManager.Spawn(alternativePosition, new Vector2(10f, 10f));
+                        if (TryFindValidSpawnPosition(position, GameConstants.EnemyRadius, out Vector2 alternativePosition))
+                        {
+                            _enemyManager.Spawn(alternativePosition, new Vector2(10f, 10f));
+                        }
                     }
                 }
 
@@ -533,8 +556,10 @@ namespace TwinStickShooter
                     }
                     else
                     {
-                        Vector2 validPos = FindValidSpawnPosition(worldPos, _levelManager.GetSpawnPosition(), entityRadius);
-                        RegisterTemplateSpawn(validPos, spawnPoints[i].Type);
+                        if (TryFindValidSpawnPosition(worldPos, entityRadius, out Vector2 validPos))
+                        {
+                            RegisterTemplateSpawn(validPos, spawnPoints[i].Type);
+                        }
                     }
                 }
             }
@@ -624,7 +649,10 @@ namespace TwinStickShooter
         {
             if (type == EnemyType.Spawner)
             {
-                _spawnerManager.Register(position);
+                if (_levelManager.IsWalkable(position, GameConstants.SpawnerRadius))
+                {
+                    _spawnerManager.Register(position);
+                }
                 return;
             }
 
@@ -644,20 +672,15 @@ namespace TwinStickShooter
                 new Vector2(-18, 18),  new Vector2(18, 18),
             };
             
-            // Calcular el centro de la sala de spawn (asumiendo que spawnPosition es la esquina superior izquierda)
-            Vector2 spawnRoomCenter = spawnPosition + new Vector2(18, 18);
-
             for (int i = 0; i < GameConstants.MaxPlayers; i++)
             {
-                Vector2 playerSpawnPosition = spawnPosition + offsets[i];
-                // Validar que la posición de spawn sea transitable
-                if (!_levelManager.IsWalkable(playerSpawnPosition, GameConstants.PlayerRadius))
-                {
-                    // Si no es transitable, buscar una posición cercana válida
-                    playerSpawnPosition = FindValidSpawnPosition(playerSpawnPosition, spawnRoomCenter);
-                }
+                Vector2 requestedPosition = spawnPosition + offsets[i];
+                bool hasValidSpawn = TryFindValidSpawnPosition(
+                    requestedPosition,
+                    GameConstants.PlayerRadius,
+                    out Vector2 playerSpawnPosition);
                 _players[i] = new Player(i, playerSpawnPosition);
-                _players[i].IsActive = (i == 0); // Solo el jugador 0 está activo por defecto
+                _players[i].IsActive = i == 0 && hasValidSpawn;
             }
         }
 
@@ -674,12 +697,15 @@ namespace TwinStickShooter
                 if (mode == GameState.SinglePlayer)
                 {
                     // Solo el jugador 0 está activo en modo un jugador
-                    _players[i].IsActive = (i == 0);
+                    _players[i].IsActive = i == 0 &&
+                        _levelManager.IsWalkable(_players[i].Position, GameConstants.PlayerRadius);
                 }
                 else if (mode == GameState.Multiplayer)
                 {
                     // Todos los jugadores están activos en modo multijugador
-                    _players[i].IsActive = true;
+                    _players[i].IsActive = _levelManager.IsWalkable(
+                        _players[i].Position,
+                        GameConstants.PlayerRadius);
                 }
             }
         }

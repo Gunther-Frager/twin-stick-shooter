@@ -57,16 +57,24 @@ namespace TwinStickShooter.Entities
 
         public bool Spawn(Vector2 position, Vector2 velocity, EnemyType type = EnemyType.Swarmer)
         {
+            float radius = type == EnemyType.Spawner
+                ? GameConstants.SpawnerRadius
+                : GameConstants.EnemyRadius;
+            if (!_levelManager.IsWalkable(position, radius))
+            {
+                return false;
+            }
+
             if (!_pool.TryAcquire(out int index, out Enemy enemy))
             {
-            return false; // pool lleno: se descarta el spawn en vez de alocar de más
+                return false; // pool lleno: se descarta el spawn en vez de alocar de más
             }
 
             enemy.PoolIndex = index;
             enemy.Type = type;
             enemy.Position = position;
             enemy.Velocity = velocity;
-            enemy.Radius = GameConstants.EnemyRadius;
+            enemy.Radius = radius;
             enemy.Color = Color.Red;
 
             if (type == EnemyType.Roamer)

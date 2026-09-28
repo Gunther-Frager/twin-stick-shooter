@@ -43,6 +43,8 @@ namespace TwinStickShooter.Core
         public IReadOnlyList<MapCapsule> PrimitiveCapsules => _primitiveCapsules;
         public bool UseRoundedContours { get; set; } = true;
         public IReadOnlyList<MapRoundedPoly> PrimitiveRoundedPolys => _primitiveRoundedPolys;
+        public float WorldWidth => _gridWidth * _cellSize;
+        public float WorldHeight => _gridHeight * _cellSize;
         public bool HasPrimitiveMapData() => _primitiveMapInitialized;
 
         /// <summary>
@@ -83,6 +85,12 @@ namespace TwinStickShooter.Core
                 throw new InvalidOperationException("Primitive map data is not initialized. Call RebuildPrimitiveMapFromGrid or SetPrimitiveMap before checking collisions.");
             }
 
+            if (position.X <= radius || position.Y <= radius ||
+                position.X >= WorldWidth - radius || position.Y >= WorldHeight - radius)
+            {
+                return true;
+            }
+
             foreach (var circle in _primitiveCircles)
             {
                 if (Vector2.DistanceSquared(position, circle.Center) <= (radius + circle.Radius) * (radius + circle.Radius))
@@ -118,6 +126,22 @@ namespace TwinStickShooter.Core
 
             pushOut = Vector2.Zero;
             float deepestOverlap = 0f;
+            float leftOverlap = radius - center.X;
+            float rightOverlap = center.X - (WorldWidth - radius);
+            float topOverlap = radius - center.Y;
+            float bottomOverlap = center.Y - (WorldHeight - radius);
+
+            if (leftOverlap > 0f)
+                pushOut.X = leftOverlap + PenetrationSeparationEpsilon;
+            else if (rightOverlap > 0f)
+                pushOut.X = -(rightOverlap + PenetrationSeparationEpsilon);
+
+            if (topOverlap > 0f)
+                pushOut.Y = topOverlap + PenetrationSeparationEpsilon;
+            else if (bottomOverlap > 0f)
+                pushOut.Y = -(bottomOverlap + PenetrationSeparationEpsilon);
+
+            bool penetratesWorldBoundary = pushOut != Vector2.Zero;
 
             foreach (var circle in _primitiveCircles)
             {
@@ -177,6 +201,9 @@ namespace TwinStickShooter.Core
                 }
             }
 
+            if (penetratesWorldBoundary)
+                return true;
+
             return deepestOverlap > 0f;
         }
 
@@ -187,6 +214,83 @@ namespace TwinStickShooter.Core
         public bool IsWalkable(Vector2 worldPosition, float radius)
         {
             return !CheckCollision(worldPosition, radius);
+        }
+
+        public bool TrySweepCircle(Vector2 start, Vector2 end, float radius, out Vector2 hitPosition, out Vector2 hitNormal)
+        {
+            hitPosition = end;
+            hitNormal = Vector2.Zero;
+
+            if (CheckCollision(start, radius))
+            {
+                hitPosition = start;
+                if (TryGetPenetration(start, radius, out Vector2 pushOut) && pushOut.LengthSquared() > 0.000001f)
+                {
+                    hitNormal = Vector2.Normalize(pushOut);
+                }
+
+                return true;
+            }
+
+            Vector2 displacement = end - start;
+            float distance = displacement.Length();
+            if (distance <= 0.0001f)
+            {
+                if (!CheckCollision(end, radius))
+                {
+                    return false;
+                }
+
+                if (TryGetPenetration(end, radius, out Vector2 penetration) && penetration.LengthSquared() > 0.000001f)
+                {
+                    hitNormal = Vector2.Normalize(penetration);
+                }
+
+                return true;
+            }
+
+            int steps = Math.Max(1, (int)MathF.Ceiling(distance / MathF.Max(radius * 0.5f, 0.5f)));
+            float previousT = 0f;
+
+            for (int step = 1; step <= steps; step++)
+            {
+                float currentT = step / (float)steps;
+                Vector2 current = Vector2.Lerp(start, end, currentT);
+                if (!CheckCollision(current, radius))
+                {
+                    previousT = currentT;
+                    continue;
+                }
+
+                float low = previousT;
+                float high = currentT;
+                for (int iteration = 0; iteration < 10; iteration++)
+                {
+                    float middle = (low + high) * 0.5f;
+                    if (CheckCollision(Vector2.Lerp(start, end, middle), radius))
+                    {
+                        high = middle;
+                    }
+                    else
+                    {
+                        low = middle;
+                    }
+                }
+
+                hitPosition = Vector2.Lerp(start, end, high);
+                if (TryGetPenetration(hitPosition, radius, out Vector2 penetration) && penetration.LengthSquared() > 0.000001f)
+                {
+                    hitNormal = Vector2.Normalize(penetration);
+                }
+                else
+                {
+                    hitNormal = -Vector2.Normalize(displacement);
+                }
+
+                return true;
+            }
+
+            return false;
         }
 
         /// <summary>
@@ -353,98 +457,7 @@ namespace TwinStickShooter.Core
                 }
             }
 
-            BuildBoundaryPrimitives();
             _primitiveMapInitialized = true;
-        }
-
-        private void BuildBoundaryPrimitives()
-        {
-            if (_gridWidth < 3 || _gridHeight < 3)
-            {
-                return;
-            }
-
-            AddHorizontalBoundaryPrimitives(0);
-            AddHorizontalBoundaryPrimitives(_gridHeight - 1);
-            AddVerticalBoundaryPrimitives(0);
-            AddVerticalBoundaryPrimitives(_gridWidth - 1);
-
-            AddBoundaryCorner(0, 0);
-            AddBoundaryCorner(_gridWidth - 1, 0);
-            AddBoundaryCorner(0, _gridHeight - 1);
-            AddBoundaryCorner(_gridWidth - 1, _gridHeight - 1);
-        }
-
-        private void AddHorizontalBoundaryPrimitives(int y)
-        {
-            int x = 1;
-            while (x < _gridWidth - 1)
-            {
-                if (!_collisionGrid[x, y])
-                {
-                    x++;
-                    continue;
-                }
-
-                int startX = x;
-                while (x + 1 < _gridWidth - 1 && _collisionGrid[x + 1, y])
-                {
-                    x++;
-                }
-
-                Vector2 start = CellCenter(startX, y);
-                Vector2 end = CellCenter(x, y);
-                AddBoundaryRun(start, end);
-                x++;
-            }
-        }
-
-        private void AddVerticalBoundaryPrimitives(int x)
-        {
-            int y = 1;
-            while (y < _gridHeight - 1)
-            {
-                if (!_collisionGrid[x, y])
-                {
-                    y++;
-                    continue;
-                }
-
-                int startY = y;
-                while (y + 1 < _gridHeight - 1 && _collisionGrid[x, y + 1])
-                {
-                    y++;
-                }
-
-                Vector2 start = CellCenter(x, startY);
-                Vector2 end = CellCenter(x, y);
-                AddBoundaryRun(start, end);
-                y++;
-            }
-        }
-
-        private void AddBoundaryRun(Vector2 start, Vector2 end)
-        {
-            float radius = _cellSize * 0.5f;
-            if (start == end)
-            {
-                _primitiveCircles.Add(new MapCircle { Center = start, Radius = radius });
-                return;
-            }
-
-            _primitiveCapsules.Add(new MapCapsule { Start = start, End = end, Radius = radius });
-        }
-
-        private void AddBoundaryCorner(int x, int y)
-        {
-            if (_collisionGrid[x, y])
-            {
-                _primitiveCircles.Add(new MapCircle
-                {
-                    Center = CellCenter(x, y),
-                    Radius = _cellSize * 0.72f
-                });
-            }
         }
 
         private void BuildRegionPrimitives(List<Point> region)

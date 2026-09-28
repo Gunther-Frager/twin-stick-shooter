@@ -21,7 +21,7 @@ namespace TwinStickShooter.Entities
         /// <summary>Array fijo de balas activas e inactivas, usado por el renderer.</summary>
         public Bullet[] Bullets => _pool.Items;
 
-        public void Spawn(Vector2 position, float angle, Color color)
+        public void Spawn(Vector2 position, float angle, Color color, int maxBounces = 0)
         {
             if (!_pool.TryAcquire(out int index, out Bullet bullet))
             {
@@ -35,6 +35,7 @@ namespace TwinStickShooter.Entities
                 (float)Math.Sin(angle)) * GameConstants.TurretBulletSpeed;
             bullet.LifeRemaining = GameConstants.BulletLifetimeSeconds;
             bullet.Color = color;
+            bullet.RemainingBounces = Math.Max(0, maxBounces);
         }
 
         public void Update(float deltaTime, Player[] players)
@@ -49,32 +50,50 @@ namespace TwinStickShooter.Entities
                     continue;
                 }
 
-                bullet.Position += bullet.Velocity * deltaTime;
+                Vector2 previousPosition = bullet.Position;
+                Vector2 nextPosition = previousPosition + bullet.Velocity * deltaTime;
                 bullet.LifeRemaining -= deltaTime;
 
                 bool offWorld =
-                    bullet.Position.X < -bullet.Radius ||
-                    bullet.Position.X > GameConstants.WorldWidth + bullet.Radius ||
-                    bullet.Position.Y < -bullet.Radius ||
-                    bullet.Position.Y > GameConstants.WorldHeight + bullet.Radius;
+                    nextPosition.X < -bullet.Radius ||
+                    nextPosition.X > GameConstants.WorldWidth + bullet.Radius ||
+                    nextPosition.Y < -bullet.Radius ||
+                    nextPosition.Y > GameConstants.WorldHeight + bullet.Radius;
 
-                bool hitWall = _levelManager.CheckCollision(bullet.Position, bullet.Radius);
+                bool hitWall = _levelManager.TrySweepCircle(
+                    previousPosition,
+                    nextPosition,
+                    bullet.Radius,
+                    out Vector2 hitPosition,
+                    out Vector2 hitNormal);
+                bullet.Position = hitWall ? hitPosition : nextPosition;
+
+                if (hitWall && bullet.RemainingBounces > 0 && hitNormal.LengthSquared() > 0.000001f)
+                {
+                    bullet.Velocity = Vector2.Reflect(bullet.Velocity, hitNormal);
+                    bullet.RemainingBounces--;
+                    bullet.Position += hitNormal * 0.01f;
+                    hitWall = false;
+                }
                 bool hitPlayer = false;
 
-                for (int j = 0; j < players.Length; j++)
+                if (!hitWall)
                 {
-                    Player player = players[j];
-                    if (!player.IsActive)
+                    for (int j = 0; j < players.Length; j++)
                     {
-                        continue;
-                    }
+                        Player player = players[j];
+                        if (!player.IsActive)
+                        {
+                            continue;
+                        }
 
-                    float distance = Vector2.Distance(bullet.Position, player.Position);
-                    if (distance < bullet.Radius + player.Radius)
-                    {
-                        player.TakeDamage(GameConstants.TurretBulletDamage);
-                        hitPlayer = true;
-                        break;
+                        float distance = Vector2.Distance(bullet.Position, player.Position);
+                        if (distance < bullet.Radius + player.Radius)
+                        {
+                            player.TakeDamage(GameConstants.TurretBulletDamage);
+                            hitPlayer = true;
+                            break;
+                        }
                     }
                 }
 

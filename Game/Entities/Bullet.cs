@@ -18,6 +18,7 @@ namespace TwinStickShooter.Entities
         public Vector2 Velocity;
         public int OwnerIndex;
         public float LifeRemaining;
+        public int RemainingBounces;
 
         public void Reset()
         {
@@ -26,6 +27,7 @@ namespace TwinStickShooter.Entities
             Velocity = Vector2.Zero;
             OwnerIndex = -1;
             LifeRemaining = 0f;
+            RemainingBounces = 0;
             Color = Color.White;
         }
     }

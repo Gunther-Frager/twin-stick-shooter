@@ -23,7 +23,7 @@ namespace TwinStickShooter.Entities
         /// <summary>Array fijo de balas (activas e inactivas); usado por el renderer.</summary>
         public Bullet[] Bullets => _pool.Items;
 
-        public void Spawn(Vector2 position, float angle, int ownerIndex, Color color)
+        public void Spawn(Vector2 position, float angle, int ownerIndex, Color color, int maxBounces = 0)
         {
             if (!_pool.TryAcquire(out int index, out Bullet bullet))
             {
@@ -38,6 +38,7 @@ namespace TwinStickShooter.Entities
             bullet.OwnerIndex = ownerIndex;
             bullet.LifeRemaining = GameConstants.BulletLifetimeSeconds;
             bullet.Color = color;
+            bullet.RemainingBounces = Math.Max(0, maxBounces);
         }
 
         public void Update(float deltaTime, EnemyManager enemyManager, SpawnerManager spawnerManager)
@@ -52,25 +53,40 @@ namespace TwinStickShooter.Entities
                     continue;
                 }
 
-                bullet.Position += bullet.Velocity * deltaTime;
+                Vector2 previousPosition = bullet.Position;
+                Vector2 nextPosition = previousPosition + bullet.Velocity * deltaTime;
                 bullet.LifeRemaining -= deltaTime;
 
                 bool offWorld =
-                    bullet.Position.X < -bullet.Radius ||
-                    bullet.Position.X > GameConstants.WorldWidth + bullet.Radius ||
-                    bullet.Position.Y < -bullet.Radius ||
-                    bullet.Position.Y > GameConstants.WorldHeight + bullet.Radius;
+                    nextPosition.X < -bullet.Radius ||
+                    nextPosition.X > GameConstants.WorldWidth + bullet.Radius ||
+                    nextPosition.Y < -bullet.Radius ||
+                    nextPosition.Y > GameConstants.WorldHeight + bullet.Radius;
 
-                bool hitWall = _levelManager.CheckCollision(bullet.Position, bullet.Radius);
+                bool hitWall = _levelManager.TrySweepCircle(
+                    previousPosition,
+                    nextPosition,
+                    bullet.Radius,
+                    out Vector2 hitPosition,
+                    out Vector2 hitNormal);
+                bullet.Position = hitWall ? hitPosition : nextPosition;
+
+                if (hitWall && bullet.RemainingBounces > 0 && hitNormal.LengthSquared() > 0.000001f)
+                {
+                    bullet.Velocity = Vector2.Reflect(bullet.Velocity, hitNormal);
+                    bullet.RemainingBounces--;
+                    bullet.Position += hitNormal * 0.01f;
+                    hitWall = false;
+                }
 
                 int spawnerIndex = spawnerManager.FindHit(bullet.Position, bullet.Radius);
                 bool hitTarget = false;
-                if (spawnerIndex >= 0)
+                if (!hitWall && spawnerIndex >= 0)
                 {
                     spawnerManager.ApplyDamage(spawnerIndex, 1f);
                     hitTarget = true;
                 }
-                else
+                else if (!hitWall)
                 {
                     int enemyIndex = enemyManager.FindHit(bullet.Position, bullet.Radius);
                     if (enemyIndex >= 0)
