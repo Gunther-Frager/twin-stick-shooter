@@ -1,84 +1,75 @@
-# Fase 1 — Arquitectura Base
+# Twin Stick Shooter
 
-Esqueleto funcional de la Fase 1: Game Loop a 60 FPS fijos, input twin-stick
-para hasta 4 mandos, y renderizado vectorial básico (naves triangulares sin
-texturas ni Content Pipeline).
-
-## Estructura
-
-```
-TwinStickShooter/
-├── Program.cs                  # Entry point
-├── Game1.cs                    # Game loop (Initialize/Update/Draw)
-├── Core/
-│   └── GameConstants.cs        # Config centralizada (deadzones, velocidad, colores)
-├── Input/
-│   ├── PlayerInputState.cs     # struct de input por jugador (zero-alloc)
-│   └── InputManager.cs         # Polling de 4 GamePads + deadzone radial
-├── Entities/
-│   └── Player.cs               # Posición, ángulo de apuntado, escudo
-└── Rendering/
-    └── ShipRenderer.cs         # Naves triangulares vía DrawUserPrimitives
-```
+Shooter twin-stick modular desarrollado en C# con .NET 8 y MonoGame DesktopGL.
+El juego combina hasta cuatro jugadores, combate con enemigos de varios tipos,
+mapas procedurales con plantillas JSON, colisiones y renderizado geométrico.
+No requiere Node.js ni Content Pipeline para los recursos actuales.
 
 ## Requisitos
 
-- .NET 8 SDK
-- Plantillas de MonoGame:
-  ```bash
-  dotnet new install MonoGame.Templates.CSharp
-  ```
-  (No es estrictamente necesario si ya tenés el `.csproj`, pero instala las
-  plantillas y confirma que el paquete `MonoGame.Framework.DesktopGL` esté
-  disponible en tu feed de NuGet.)
+- .NET 8 SDK.
+- Acceso a NuGet para restaurar MonoGame y las dependencias de pruebas.
 
-## Compilar y correr
+## Estructura
 
-```bash
-cd TwinStickShooter
-dotnet restore
-dotnet run
+```text
+Game/
+  Program.cs                 Entrada de la aplicación.
+  Game1.cs                   Ciclo principal y coordinación de sistemas.
+  Core/                      Configuración, mapas, física, cámara, pooling y spawners.
+  Entities/                  Jugadores, enemigos, balas, partículas y sus managers.
+  Input/                     Estado y lectura de teclado, mouse y mandos.
+  Rendering/                 Renderizadores de arena, naves, enemigos y efectos.
+  Content/
+    Maps/                    Mapas JSON para carga directa.
+    RoomTemplates/           Plantillas JSON para generación procedural.
+Game.Tests/                  Pruebas unitarias y regresiones de geometría/física.
 ```
 
-## Qué deberías ver
+Módulos principales:
 
-- Una ventana de 1280x720 con fondo oscuro.
-- 4 naves triangulares (una por color: cian, magenta, amarillo, violeta) en
-  el centro de la pantalla, una por cada mando conectado.
-- Cada nave se mueve con el stick izquierdo y rota apuntando según el stick
-  derecho (mantiene el último ángulo si soltás el stick).
-- Mantener el botón A/Cross dibuja un anillo blanco alrededor de la nave
-  (escudo).
-- El título de la ventana muestra FPS y cantidad de mandos conectados.
+- `Core/GameConstants.cs`: valores de simulación, controles, límites y generación.
+- `Core/LevelManager.cs`, `MapGenerator.cs` y `MapLoader.cs`: ciclo de vida y creación de mapas.
+- `Core/RoomTemplateData.cs` y `RoomTemplateLoader.cs`: lectura de grillas y spawns tipados.
+- `Core/PhysicsHelper.cs`, `MapPrimitive.cs` y `RoundedContour.cs`: consultas de colisión y geometría.
+- `Core/ObjectPool.cs`: reutilización de objetos para entidades de alta frecuencia.
+- `Entities/`: lógica de jugador, enemigos, proyectiles, partículas y administración de sus ciclos de vida.
+- `Input/InputManager.cs`: snapshot de input para hasta cuatro jugadores y deadzone radial.
+- `Rendering/`: conversión del estado del juego en geometría dibujada por MonoGame.
 
-## Notas de diseño (por qué está así)
+## Ejecutar
 
-- **Sin Content Pipeline todavía:** las naves son geometría generada en
-  código (`ShipRenderer`), no sprites. Esto evita la complejidad de MGCB en
-  esta fase; el pipeline de shaders/bloom llega recién en la Fase 7.
-- **Zero-allocation en el loop:** los arrays de `InputManager` y
-  `ShipRenderer` se crean una sola vez; `Update`/`Draw` solo escriben sobre
-  buffers existentes. `PlayerInputState` es un `struct` a propósito.
-- **Deadzone radial (no por eje):** más natural para apuntado 360° en un
-  twin-stick shooter que la deadzone cuadrada por defecto.
-- **HUD en el título de ventana:** evita traer `SpriteFont` (y por lo tanto
-  el Content Pipeline) solo para mostrar FPS en Fase 1.
+Desde la raíz del repositorio, restaura y ejecuta el proyecto:
 
-## Próximos pasos sugeridos (Fase 2)
+```powershell
+dotnet restore Game/TwinStickShooter.csproj
+dotnet run --project Game/TwinStickShooter.csproj
+```
 
-- `ObjectPool<T>` genérico para balas/partículas.
-- `ParticleSystem` con buffers pre-alocados.
-- Mover el spawn de jugadores fuera de `Game1.Initialize` hacia un futuro
-  `LevelManager` (Fase 4).
+El jugador 1 puede moverse con `WASD` o las flechas, apuntar con el mouse o
+`IJKL`/teclado numérico, disparar con espacio o clic izquierdo y activar el
+escudo con `Shift`. Un mando usa los sticks izquierdo y derecho, gatillo derecho
+para disparar y botón `A` para el escudo. Los mandos adicionales controlan a los
+jugadores 2 a 4. `F1` y `F2` seleccionan los modos de juego; `F3` alterna la escena
+normal y la escena de combate de prueba cuando los hotkeys de depuración están
+habilitados.
 
-## Escena instrumental de combate
+## Pruebas
 
-La etapa 5 conserva el tipo de cada punto de `enemySpawns` mediante el campo
-opcional `type`: `Swarmer`, `Roamer`, `Turret` o `Spawner`. Si el campo falta o
-no es válido, se usa `Swarmer`.
+Ejecuta la suite completa con:
 
-Para probar el combate sin generación procedural, cambia
-`GameConstants.StartInCombatTestScene` a `true`. La escena configura una gran sala
-abierta con los tipos principales. Durante la ejecución, `F3` reinicia la
-escena. Los spawners son estructuras independientes del pool de enemigos,
-generan swarmers respetando sus límites y dejan de generar al destruirse.
+```powershell
+dotnet test Game.Tests/Game.Tests.csproj
+```
+
+Las pruebas cubren regresiones de colisión, descomposición y ciclo de vida de
+primitivas de mapa, contornos redondeados, deslizamiento físico y acceso a celdas
+de plantillas. El proyecto usa xUnit y Microsoft.NET.Test.Sdk.
+
+## Plantillas y escena de combate
+
+Las plantillas de `Game/Content/RoomTemplates/` definen una grilla y una lista
+opcional `enemySpawns`. Cada spawn puede especificar `Swarmer`, `Roamer`,
+`Turret` o `Spawner`; los valores ausentes o desconocidos usan `Swarmer` como
+tipo por defecto. `F3` permite inspeccionar durante la ejecución la escena de
+combate de prueba y volver al mapa procedural.

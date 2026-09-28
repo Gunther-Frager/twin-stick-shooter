@@ -6,6 +6,24 @@ namespace TwinStickShooter.Tests;
 
 public class PhysicsHelperSlidingTests
 {
+    [Theory]
+    [InlineData(-100f, 1200f, 16f, 16f, 1200f)]
+    [InlineData(2500f, 1200f, 16f, 2384f, 1200f)]
+    [InlineData(1200f, -100f, 16f, 1200f, 16f)]
+    [InlineData(1200f, 2500f, 16f, 1200f, 2384f)]
+    [InlineData(1200f, 1200f, 16f, 1200f, 1200f)]
+    public void ClampToWorldKeepsEntityInsideWorldBounds(
+        float x,
+        float y,
+        float radius,
+        float expectedX,
+        float expectedY)
+    {
+        Vector2 result = PhysicsHelper.ClampToWorld(new Vector2(x, y), radius);
+
+        Assert.Equal(new Vector2(expectedX, expectedY), result);
+    }
+
     [Fact]
     public void MoveWithCollision_ShouldSlideWhenDiagonalMovementCatchesOnLWallCorner()
     {

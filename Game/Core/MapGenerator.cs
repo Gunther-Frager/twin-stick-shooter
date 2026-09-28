@@ -212,7 +212,6 @@ namespace TwinStickShooter.Core
                 }
 
                 // Intentar colocar la habitación sin solapamientos
-                bool placed = false;
                 for (int attempt = 0; attempt < GameConstants.MaxRoomPlacementAttempts; attempt++)
                 {
                     int roomX = _random.Next(2, _width - roomWidth - 2);
@@ -291,7 +290,6 @@ namespace TwinStickShooter.Core
 
                         rooms.Add(newRoom);
                         Rooms.Add(newRoom);
-                        placed = true;
                         break;
                     }
                 }

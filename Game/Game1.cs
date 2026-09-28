@@ -10,6 +10,7 @@ using TwinStickShooter.Rendering;
 
 namespace TwinStickShooter
 {
+    /// <summary>Coordina la inicialización, simulación y presentación de una partida.</summary>
     public class Game1 : Game
     {
         private readonly GraphicsDeviceManager _graphics;
@@ -89,6 +90,7 @@ namespace TwinStickShooter
             _debugConsole.LoadContent(GraphicsDevice);
         }
 
+        /// <summary>Actualiza input, jugadores, combate, efectos y HUD en cada tick.</summary>
         protected override void Update(GameTime gameTime)
         {
             float deltaTime = (float)gameTime.ElapsedGameTime.TotalSeconds;
@@ -519,7 +521,7 @@ namespace TwinStickShooter
                     }
                 }
 
-                // TODO: remover cuando el sistema de spawns por plantilla (Etapa 5) esté listo.
+                // Fallback de depuración para mapas generados sin plantillas.
                 SpawnDebugEnemies(new[]
                 {
                     new SpawnSpec(EnemyType.Roamer, new Vector2(150f, 150f)),

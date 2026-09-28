@@ -47,7 +47,7 @@ namespace TwinStickShooter.Core
         // --- Enemigos (Fase 5: IA básica) ---
         public const int MaxEnemies = 64;
         public const int MaxSpawners = 16;
-        public const bool StartInCombatTestScene = false;
+        public static readonly bool StartInCombatTestScene = false;
         public const bool EnableDebugHotkeys = true;
         public const float EnemyRadius = 12f;
 
@@ -94,7 +94,7 @@ namespace TwinStickShooter.Core
         public const float RoundedContourRadiusScale = 0.35f;
         
         // --- Generación de mapas ---
-        public const bool UseRoomTemplates = true;
+        public static readonly bool UseRoomTemplates = true;
         public const int MaxGenerationAttempts = 20; // Intentos máximos para generar un mapa transitable
         public const float MinSpawnExitDistance = 15f; // Distancia mínima en celdas entre spawn y salida
         public const int MinRoomCount = 8;
