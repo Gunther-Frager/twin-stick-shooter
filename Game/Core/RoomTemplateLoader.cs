@@ -45,25 +45,14 @@ namespace TwinStickShooter.Core
                         PropertyNameCaseInsensitive = true,
                     };
                     
-                    // Deserializar a una clase intermedia para manejar el mapeo de enemySpawns
-                    var templateData = JsonSerializer.Deserialize<RoomTemplateDataIntermediate>(json, options);
+                    var templateData = JsonSerializer.Deserialize<RoomTemplateData>(json, options);
                     if (templateData == null)
                     {
                         Console.WriteLine($"[RoomTemplateLoader] ERROR en {file}: No se pudo deserializar el JSON.");
                         continue;
                     }
                     
-                    // Mapear a la clase final
-                    var roomTemplate = new RoomTemplateData
-                    {
-                        Id = templateData.Id,
-                        MinSize = templateData.MinSize,
-                        MaxSize = templateData.MaxSize,
-                        Grid = templateData.Grid,
-                    };
-                    roomTemplate.MapEnemySpawns(templateData.EnemySpawns);
-                    
-                    templates.Add(roomTemplate);
+                    templates.Add(templateData);
                     Console.WriteLine($"[RoomTemplateLoader] Plantilla cargada: {templateData.Id} desde {file}");
                 }
                 catch (Exception ex)
@@ -73,18 +62,6 @@ namespace TwinStickShooter.Core
             }
             
             return templates;
-        }
-        
-        /// <summary>
-        /// Clase intermedia para deserializar el JSON y manejar el mapeo de enemySpawns.
-        /// </summary>
-        private class RoomTemplateDataIntermediate
-        {
-            public string Id { get; set; }
-            public int MinSize { get; set; }
-            public int MaxSize { get; set; }
-            public string[] Grid { get; set; }
-            public List<RoomTemplateData.EnemySpawnData> EnemySpawns { get; set; }
         }
     }
 }

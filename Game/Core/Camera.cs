@@ -16,6 +16,15 @@ namespace TwinStickShooter.Core
 
         public Matrix ViewMatrix { get; private set; }
 
+        public void Reset(Vector2 position)
+        {
+            _position = position;
+            _zoom = GameConstants.CameraZoomMax;
+            ViewMatrix = Matrix.CreateTranslation(-_position.X, -_position.Y, 0) *
+                         Matrix.CreateScale(_zoom, _zoom, 1) *
+                         Matrix.CreateTranslation(GameConstants.ScreenWidth / 2f, GameConstants.ScreenHeight / 2f, 0);
+        }
+
         /// <summary>
         /// Actualiza la posición y el zoom de la cámara en base a los jugadores activos.
         /// </summary>

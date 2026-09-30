@@ -33,7 +33,7 @@ namespace TwinStickShooter.Core
             _cellSize = cellSize;
             _collisionGrid = new bool[gridWidth, gridHeight];
             _playableArea = new bool[gridWidth, gridHeight];
-            _mapGenerator = new MapGenerator(gridWidth, gridHeight, cellSize);
+            _mapGenerator = new MapGenerator(gridWidth, gridHeight);
         }
 
         public IReadOnlyList<MapCircle> PrimitiveCircles => _primitiveCircles;

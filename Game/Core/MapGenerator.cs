@@ -6,14 +6,12 @@ using System.Linq;
 namespace TwinStickShooter.Core
 {
     /// <summary>
-    /// Generador de mapas procedurales con garantía de transitabilidad vía MST.
-    /// Conecta las habitaciones usando Kruskal y permite loops adicionales.
+    /// Genera terreno mediante un crawler que excava y conecta salas prefab.
     /// </summary>
     public class MapGenerator
     {
         private readonly int _width;
         private readonly int _height;
-        private readonly int _cellSize;
         private Random _random;
         private List<RoomTemplateData> _roomTemplates = new List<RoomTemplateData>();
 
@@ -22,16 +20,16 @@ namespace TwinStickShooter.Core
         public Point ExitPoint { get; private set; }
         public int SpawnExitPathLength { get; private set; }
         public string LastGenerationFailure { get; private set; }
-        public List<Vector2> RoomEnemySpawnPoints { get; } = new List<Vector2>();
-        public List<RoomTemplateData.EnemySpawn> RoomEnemySpawns { get; } = new List<RoomTemplateData.EnemySpawn>();
+        public int CrawlerStepCount { get; private set; }
+        public int PrefabPlacementAttempts { get; private set; }
+        public int PrefabRoomsPlaced { get; private set; }
         public List<Rectangle> Rooms { get; private set; } = new List<Rectangle>();
         public List<(int From, int To)> RoomConnections { get; } = new List<(int From, int To)>();
 
-        public MapGenerator(int width, int height, int cellSize, MapGenerationSettings settings = null)
+        public MapGenerator(int width, int height, MapGenerationSettings settings = null)
         {
             _width = width;
             _height = height;
-            _cellSize = cellSize;
             Settings = settings ?? new MapGenerationSettings();
             _random = new Random(Settings.Seed);
         }
@@ -41,86 +39,33 @@ namespace TwinStickShooter.Core
             _roomTemplates = templates ?? new List<RoomTemplateData>();
         }
 
-        private class Edge : IComparable<Edge>
-        {
-            public int From { get; set; }
-            public int To { get; set; }
-            public float Distance { get; set; }
-
-            public int CompareTo(Edge other)
-            {
-                return Distance.CompareTo(other.Distance);
-            }
-        }
-
-        private class UnionFind
-        {
-            private readonly int[] _parent;
-            private readonly int[] _rank;
-
-            public UnionFind(int size)
-            {
-                _parent = new int[size];
-                _rank = new int[size];
-                for (int i = 0; i < size; i++)
-                {
-                    _parent[i] = i;
-                }
-            }
-
-            public int Find(int x)
-            {
-                if (_parent[x] != x)
-                {
-                    _parent[x] = Find(_parent[x]);
-                }
-                return _parent[x];
-            }
-
-            public void Union(int x, int y)
-            {
-                int rootX = Find(x);
-                int rootY = Find(y);
-                if (rootX == rootY) return;
-
-                if (_rank[rootX] < _rank[rootY])
-                {
-                    _parent[rootX] = rootY;
-                }
-                else if (_rank[rootX] > _rank[rootY])
-                {
-                    _parent[rootY] = rootX;
-                }
-                else
-                {
-                    _parent[rootY] = rootX;
-                    _rank[rootX]++;
-                }
-            }
-        }
-
         public int[,] GenerateMap()
         {
             Point previousSpawn = SpawnPoint;
             Point previousExit = ExitPoint;
             int previousPathLength = SpawnExitPathLength;
+            int previousStepCount = CrawlerStepCount;
+            int previousPlacementAttempts = PrefabPlacementAttempts;
+            int previousPrefabRoomsPlaced = PrefabRoomsPlaced;
             List<Rectangle> previousRooms = Rooms.ToList();
             List<(int From, int To)> previousConnections = RoomConnections.ToList();
-            List<Vector2> previousSpawnPoints = RoomEnemySpawnPoints.ToList();
-            List<RoomTemplateData.EnemySpawn> previousTypedSpawns = RoomEnemySpawns.ToList();
-            _random = new Random(Settings.Seed);
             int[,] grid = new int[_width, _height];
             LastGenerationFailure = null;
+            int requiredPrefabRooms = _roomTemplates.Count == 0
+                ? 0
+                : Math.Min(Math.Max(0, Settings.MinPrefabRooms), Math.Max(0, Settings.MaxPrefabRooms));
 
             for (int attempt = 0; attempt < Math.Max(1, Settings.MaxGenerationAttempts); attempt++)
             {
-                RoomEnemySpawnPoints.Clear();
-                RoomEnemySpawns.Clear();
+                _random = new Random(unchecked(Settings.Seed + attempt));
                 Rooms.Clear();
                 RoomConnections.Clear();
                 SpawnExitPathLength = -1;
+                CrawlerStepCount = 0;
+                PrefabPlacementAttempts = 0;
+                PrefabRoomsPlaced = 0;
 
-                // 1. Inicializar con paredes
+                // El crawler excava desde la sala inicial; los prefabs nacen conectados a su recorrido.
                 for (int x = 0; x < _width; x++)
                 {
                     for (int y = 0; y < _height; y++)
@@ -129,361 +74,287 @@ namespace TwinStickShooter.Core
                     }
                 }
 
-                // 2. Generar salas y obtener 1 centro exacto por sala
-                List<Rectangle> rooms = GenerateRooms(grid);
-                List<Point> roomCenters = rooms.Select(r => r.Center).ToList();
+                if (!GrowCrawlerMap(grid)) continue;
 
-                // 3. Conectar vía MST (Kruskal) + loops opcionales
-                GenerateCorridors(grid, roomCenters);
-
-                // 4. Spawn en sala inicial (muy pequeña), Exit en la sala más lejana
-                bool validSpawn = false;
-                if (rooms.Count > 0)
-                {
-                    // Obtener la habitación del spawn (siempre la primera, pequeña)
-                    Rectangle spawnRoom = rooms[0];
-                    
-                    // Validar que la habitación de spawn sea pequeña
-                    if (spawnRoom.Width <= Settings.SpawnRoomMaxSize && spawnRoom.Height <= Settings.SpawnRoomMaxSize)
-                    {
-                        validSpawn = true;
-                        // Asegurar que el spawn esté DENTRO de la habitación pequeña
-                        SpawnPoint = new Point(
-                            spawnRoom.X + spawnRoom.Width / 2,
-                            spawnRoom.Y + spawnRoom.Height / 2
-                        );
-                        
-                        if (roomCenters.Count > 1)
-                        {
-                            // Filtrar centros que estén en habitaciones distintas y a una distancia mínima
-                            var distantCenters = roomCenters
-                                .Where((c, index) => index > 0 && !IsPointInRoom(c, spawnRoom))
-                                .Select(c => new { Point = c, Distance = FindPathDistance(grid, SpawnPoint, c) })
-                                .Where(candidate => candidate.Distance >= Settings.MinimumSpawnExitPathLength)
-                                .OrderByDescending(candidate => candidate.Distance)
-                                .ToList();
-                            
-                            if (distantCenters.Count > 0)
-                            {
-                                ExitPoint = distantCenters[0].Point;
-                                SpawnExitPathLength = distantCenters[0].Distance;
-                            }
-                            else
-                            {
-                                validSpawn = false;
-                            }
-                        }
-                        else
-                        {
-                            ExitPoint = new Point(_width - 2, _height - 2); // Fallback extremo
-                        }
-                    }
-                }
-                else
-                {
-                    SpawnPoint = new Point(1, 1);
-                    ExitPoint = new Point(_width - 2, _height - 2);
-                }
-
-                SpawnExitPathLength = FindPathDistance(grid, SpawnPoint, ExitPoint);
-                // 5. Verificar transitabilidad total con BFS (asegurar que todas las salas sean accesibles)
-                if (validSpawn && IsMapFullyTraversable(grid, SpawnPoint, ExitPoint, roomCenters) &&
-                    SpawnExitPathLength >= Settings.MinimumSpawnExitPathLength)
+                ExitPoint = FindFarthestReachablePoint(grid, SpawnPoint, out int routeLength);
+                SpawnExitPathLength = routeLength;
+                if (SpawnExitPathLength >= Settings.MinimumSpawnExitPathLength &&
+                    PrefabRoomsPlaced >= requiredPrefabRooms &&
+                    AreAllRoomsReachable(grid, SpawnPoint))
                 {
                     return grid;
                 }
             }
 
             LastGenerationFailure = $"No se generó un mapa válido tras {Math.Max(1, Settings.MaxGenerationAttempts)} intentos. " +
-                $"Distancia mínima requerida: {Settings.MinimumSpawnExitPathLength} celdas.";
+                $"Distancia mínima requerida: {Settings.MinimumSpawnExitPathLength} celdas; " +
+                $"prefabs mínimos: {requiredPrefabRooms}.";
             SpawnPoint = previousSpawn;
             ExitPoint = previousExit;
             SpawnExitPathLength = previousPathLength;
+            CrawlerStepCount = previousStepCount;
+            PrefabPlacementAttempts = previousPlacementAttempts;
+            PrefabRoomsPlaced = previousPrefabRoomsPlaced;
             Rooms = previousRooms;
             RoomConnections.Clear();
             RoomConnections.AddRange(previousConnections);
-            RoomEnemySpawnPoints.Clear();
-            RoomEnemySpawnPoints.AddRange(previousSpawnPoints);
-            RoomEnemySpawns.Clear();
-            RoomEnemySpawns.AddRange(previousTypedSpawns);
             throw new InvalidOperationException(LastGenerationFailure);
         }
 
-        private List<Rectangle> GenerateRooms(int[,] grid)
+        private bool GrowCrawlerMap(int[,] grid)
         {
-            List<Rectangle> rooms = new List<Rectangle>();
-            Rooms.Clear();
-            int minRoomCount = Math.Max(2, Settings.MinRoomCount);
-            int maxRoomCount = Math.Max(minRoomCount + 1, Settings.MaxRoomCount);
-            int roomCount = _random.Next(minRoomCount, maxRoomCount);
+            if (_width < 8 || _height < 8) return false;
 
-            for (int i = 0; i < roomCount; i++)
+            int spawnRoomSize = Math.Clamp(Settings.SpawnRoomMinWidth, 2, Math.Min(4, Math.Min(_width - 4, _height - 4)));
+            int spawnX = _width / 2 - spawnRoomSize / 2;
+            int spawnY = _height / 2 - spawnRoomSize / 2;
+            Rectangle spawnRoom = new Rectangle(spawnX, spawnY, spawnRoomSize, spawnRoomSize);
+            CarveRoom(grid, spawnRoom, null);
+            Rooms.Add(spawnRoom);
+            SpawnPoint = spawnRoom.Center;
+
+            Point current = SpawnPoint;
+            Point direction = new Point(1, 0);
+            int attachedRoomIndex = 0;
+            Point[] directions =
             {
-                int roomWidth, roomHeight;
-                
-                if (i == 0) // La habitación de spawn siempre es muy pequeña
+                new Point(0, -1), new Point(1, 0), new Point(0, 1), new Point(-1, 0),
+            };
+            int maxSteps = Math.Max(1, Settings.CrawlerMaxSteps);
+            int roomInterval = Math.Max(1, Settings.CrawlerRoomInterval);
+            int maxPrefabRooms = Math.Max(0, Settings.MaxPrefabRooms);
+
+            for (int step = 1; step <= maxSteps; step++)
+            {
+                current = MoveCrawler(grid, current, ref direction, directions);
+                grid[current.X, current.Y] = 0;
+                CrawlerStepCount = step;
+
+                if (step % roomInterval == 0 && PrefabRoomsPlaced < maxPrefabRooms && _roomTemplates.Count > 0)
                 {
-                    roomWidth = _random.Next(Settings.SpawnRoomMinWidth, Settings.SpawnRoomMaxWidth);
-                    roomHeight = _random.Next(Settings.SpawnRoomMinWidth, Settings.SpawnRoomMaxWidth);
+                    PrefabPlacementAttempts++;
+                    if (TryInsertPrefab(grid, current, directions, out Rectangle prefabRoom))
+                    {
+                        int roomIndex = Rooms.Count;
+                        Rooms.Add(prefabRoom);
+                        RoomConnections.Add((attachedRoomIndex, roomIndex));
+                        attachedRoomIndex = roomIndex;
+                        PrefabRoomsPlaced++;
+                    }
                 }
-                else
+            }
+
+            return true;
+        }
+
+        private Point MoveCrawler(int[,] grid, Point current, ref Point previousDirection, Point[] directions)
+        {
+            List<Point> unvisited = new List<Point>();
+            List<Point> available = new List<Point>();
+            foreach (Point direction in directions)
+            {
+                Point candidate = current + direction;
+                if (candidate.X <= 1 || candidate.X >= _width - 2 || candidate.Y <= 1 || candidate.Y >= _height - 2)
                 {
-                    // Habitaciones más grandes para el resto del mapa
-                    if (_random.NextDouble() < Settings.MediumRoomProbability) // Probabilidad de habitación mediana
-                    {
-                        roomWidth = _random.Next(Settings.MediumRoomMinWidth, Settings.MediumRoomMaxWidth);
-                        roomHeight = _random.Next(Settings.MediumRoomMinWidth, Settings.MediumRoomMaxWidth);
-                    }
-                    else
-                    {
-                        roomWidth = _random.Next(Settings.StandardRoomMinWidth, Settings.StandardRoomMaxWidth);
-                        roomHeight = _random.Next(Settings.StandardRoomMinWidth, Settings.StandardRoomMaxWidth);
-                    }
+                    continue;
                 }
 
-                // Intentar colocar la habitación sin solapamientos
-                for (int attempt = 0; attempt < Settings.MaxRoomPlacementAttempts; attempt++)
+                bool insideRoom = false;
+                foreach (Rectangle room in Rooms)
                 {
-                    int roomX = _random.Next(2, _width - roomWidth - 2);
-                    int roomY = _random.Next(2, _height - roomHeight - 2);
-
-                    Rectangle newRoom = new Rectangle(roomX, roomY, roomWidth, roomHeight);
-
-                    // Verificar intersección con margen para evitar que se toquen o fusionen
-                    Rectangle paddedRoom = new Rectangle(
-                        newRoom.X - Settings.RoomPadding,
-                        newRoom.Y - Settings.RoomPadding,
-                        newRoom.Width + Settings.RoomPadding * 2,
-                        newRoom.Height + Settings.RoomPadding * 2);
-                    
-                    bool overlaps = false;
-                    foreach (var room in rooms)
+                    if (room.Contains(candidate))
                     {
-                        if (paddedRoom.Intersects(room))
-                        {
-                            overlaps = true;
-                            break;
-                        }
-                    }
-
-                    if (!overlaps)
-                    {
-                        for (int x = roomX; x < roomX + roomWidth; x++)
-                        {
-                            for (int y = roomY; y < roomY + roomHeight; y++)
-                            {
-                                grid[x, y] = 0;
-                            }
-                        }
-
-                        RoomTemplateData template = null;
-                        if (i > 0)
-                        {
-                            template = SelectTemplate(newRoom);
-                        }
-
-                        if (template != null)
-                        {
-                            for (int localX = 0; localX < roomWidth; localX++)
-                            {
-                                for (int localY = 0; localY < roomHeight; localY++)
-                                {
-                                    if (template.TryGetCell(localX, localY, out bool isWall))
-                                    {
-                                        int gx = roomX + localX;
-                                        int gy = roomY + localY;
-                                        if (gx >= 0 && gx < _width && gy >= 0 && gy < _height)
-                                        {
-                                            grid[gx, gy] = isWall ? 1 : 0;
-                                        }
-                                    }
-                                }
-                            }
-
-                            foreach (var spawn in template.TypedEnemySpawns)
-                            {
-                                float worldX = (roomX + spawn.Position.X) * _cellSize + _cellSize / 2f;
-                                float worldY = (roomY + spawn.Position.Y) * _cellSize + _cellSize / 2f;
-                                RoomEnemySpawns.Add(new RoomTemplateData.EnemySpawn(
-                                    new Point((int)worldX, (int)worldY), spawn.Type));
-                                RoomEnemySpawnPoints.Add(new Vector2(worldX, worldY));
-                            }
-                        }
-                        else
-                        {
-                            if (i > 0 && _random.NextDouble() < Math.Clamp(Settings.CrawlerRoomProbability, 0.0, 1.0))
-                            {
-                                AddCrawlerRoom(grid, newRoom);
-                            }
-                            // Agregar islas solo en habitaciones grandes y no en la de spawn
-                            else if (i > 0 && roomWidth >= GameConstants.IslandMinRoomSize && roomHeight >= GameConstants.IslandMinRoomSize)
-                            {
-                                AddIslandsToRoom(grid, newRoom);
-                            }
-                        }
-
-                        rooms.Add(newRoom);
-                        Rooms.Add(newRoom);
+                        insideRoom = true;
                         break;
                     }
                 }
+                if (insideRoom && grid[candidate.X, candidate.Y] != 0) continue;
+
+                available.Add(direction);
+                if (grid[candidate.X, candidate.Y] != 0) unvisited.Add(direction);
             }
 
-            return rooms;
+            List<Point> choices = unvisited.Count > 0 && _random.NextDouble() < 0.8 ? unvisited : available;
+            if (choices.Count == 0) return current;
+
+            Point chosen;
+            if (_random.NextDouble() < 0.55 && choices.Contains(previousDirection))
+            {
+                chosen = previousDirection;
+            }
+            else
+            {
+                chosen = choices[_random.Next(choices.Count)];
+            }
+
+            previousDirection = chosen;
+            return current + chosen;
         }
 
-
-
-        private RoomTemplateData SelectTemplate(Rectangle room)
+        private bool TryInsertPrefab(int[,] grid, Point crawlerPosition, Point[] directions, out Rectangle placedRoom)
         {
-            if (!Settings.UseRoomTemplates || _roomTemplates == null || _roomTemplates.Count == 0)
+            placedRoom = Rectangle.Empty;
+            if (_roomTemplates == null || _roomTemplates.Count == 0) return false;
+
+            int firstTemplate = _random.Next(_roomTemplates.Count);
+            for (int templateOffset = 0; templateOffset < _roomTemplates.Count; templateOffset++)
             {
-                return null;
+                RoomTemplateData template = _roomTemplates[(firstTemplate + templateOffset) % _roomTemplates.Count];
+                if (template.Grid == null || template.Grid.Length == 0) continue;
+                int templateHeight = template.Grid.Length;
+                int templateWidth = 0;
+                for (int y = 0; y < templateHeight; y++)
+                {
+                    if (template.Grid[y] != null) templateWidth = Math.Max(templateWidth, template.Grid[y].Length);
+                }
+                if (templateWidth < 3 || templateHeight < 3) continue;
+
+                int firstDirection = _random.Next(directions.Length);
+                for (int directionOffset = 0; directionOffset < directions.Length; directionOffset++)
+                {
+                    Point side = directions[(firstDirection + directionOffset) % directions.Length];
+                    for (int offset = 2; offset <= 4; offset++)
+                    {
+                        Rectangle candidate = GetPrefabBounds(crawlerPosition, side, offset, templateWidth, templateHeight);
+                        if (!CanPlacePrefab(grid, candidate)) continue;
+
+                        CarveRoom(grid, candidate, template);
+                        Point door = GetRoomDoor(candidate, crawlerPosition, side);
+                        Point outsideDoor = door - side;
+                        ConnectRooms(grid, crawlerPosition, outsideDoor);
+                        grid[door.X, door.Y] = 0;
+                        placedRoom = candidate;
+                        return true;
+                    }
+                }
             }
 
-            var matchingTemplates = _roomTemplates.Where(t =>
-                room.Width >= t.MinSize && room.Width <= t.MaxSize &&
-                room.Height >= t.MinSize && room.Height <= t.MaxSize).ToList();
-
-            if (matchingTemplates.Count == 0)
-            {
-                return null;
-            }
-
-            return matchingTemplates[_random.Next(matchingTemplates.Count)];
+            return false;
         }
 
-        private void AddIslandsToRoom(int[,] grid, Rectangle room)
+        private static Rectangle GetPrefabBounds(Point crawler, Point side, int offset, int width, int height)
         {
-            int islandCount = _random.Next(GameConstants.MinIslandsPerRoom, GameConstants.MaxIslandsPerRoom);
-            for (int i = 0; i < islandCount; i++)
+            int x = side.X > 0 ? crawler.X + offset : side.X < 0 ? crawler.X - offset - width + 1 : crawler.X - width / 2;
+            int y = side.Y > 0 ? crawler.Y + offset : side.Y < 0 ? crawler.Y - offset - height + 1 : crawler.Y - height / 2;
+            return new Rectangle(x, y, width, height);
+        }
+
+        private bool CanPlacePrefab(int[,] grid, Rectangle candidate)
+        {
+            Rectangle padded = new Rectangle(candidate.X - 1, candidate.Y - 1, candidate.Width + 2, candidate.Height + 2);
+            if (padded.Left <= 0 || padded.Top <= 0 || padded.Right >= _width - 1 || padded.Bottom >= _height - 1)
             {
-                // Colocar isla lejos de los bordes para no bloquear pasillos
-                int ix = _random.Next(room.X + GameConstants.IslandEdgePadding, room.X + room.Width - GameConstants.IslandEdgePadding);
-                int iy = _random.Next(room.Y + GameConstants.IslandEdgePadding, room.Y + room.Height - GameConstants.IslandEdgePadding);
-                
-                grid[ix, iy] = 1;
-                
-                // Probabilidad de que sea una isla de 2x2 si hay espacio
-                if (_random.NextDouble() < GameConstants.LargeIslandProbability && 
-                    ix + 1 < room.X + room.Width - GameConstants.IslandEdgePadding && 
-                    iy + 1 < room.Y + room.Height - GameConstants.IslandEdgePadding)
+                return false;
+            }
+
+            foreach (Rectangle room in Rooms)
+            {
+                if (padded.Intersects(room)) return false;
+            }
+
+            for (int x = candidate.Left; x < candidate.Right; x++)
+            {
+                for (int y = candidate.Top; y < candidate.Bottom; y++)
                 {
-                    grid[ix + 1, iy] = 1;
-                    grid[ix, iy + 1] = 1;
-                    grid[ix + 1, iy + 1] = 1;
+                    if (grid[x, y] == 0) return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static Point GetRoomDoor(Rectangle room, Point crawler, Point side)
+        {
+            if (side.X > 0) return new Point(room.Left, Math.Clamp(crawler.Y, room.Top + 1, room.Bottom - 2));
+            if (side.X < 0) return new Point(room.Right - 1, Math.Clamp(crawler.Y, room.Top + 1, room.Bottom - 2));
+            if (side.Y > 0) return new Point(Math.Clamp(crawler.X, room.Left + 1, room.Right - 2), room.Top);
+            return new Point(Math.Clamp(crawler.X, room.Left + 1, room.Right - 2), room.Bottom - 1);
+        }
+
+        private static void CarveRoom(int[,] grid, Rectangle room, RoomTemplateData template)
+        {
+            for (int x = room.Left; x < room.Right; x++)
+            {
+                for (int y = room.Top; y < room.Bottom; y++)
+                {
+                    bool isWall = false;
+                    if (template != null) template.TryGetCell(x - room.Left, y - room.Top, out isWall);
+                    grid[x, y] = isWall ? 1 : 0;
                 }
             }
         }
 
-        private void AddCrawlerRoom(int[,] grid, Rectangle room)
+        private bool AreAllRoomsReachable(int[,] grid, Point start)
         {
-            for (int x = room.X; x < room.X + room.Width; x++)
+            bool[,] visited = FindReachableCells(grid, start, out _);
+            foreach (Rectangle room in Rooms)
             {
-                for (int y = room.Y; y < room.Y + room.Height; y++)
+                bool reachableFloor = false;
+                for (int x = room.Left; x < room.Right && !reachableFloor; x++)
                 {
-                    grid[x, y] = 1;
+                    for (int y = room.Top; y < room.Bottom; y++)
+                    {
+                        if (grid[x, y] == 0 && visited[x, y])
+                        {
+                            reachableFloor = true;
+                            break;
+                        }
+                    }
                 }
+                if (!reachableFloor) return false;
             }
 
-            Point center = room.Center;
-            grid[center.X, center.Y] = 0;
-
-            long totalSteps = (long)Math.Max(0, Settings.CrawlerStepsPerRoomCell) * room.Width * room.Height;
-            if (totalSteps == 0)
-            {
-                return;
-            }
-
-            int walkerCount = _random.Next(1, 4);
-            Point[] directions =
-            {
-                new Point(0, 1),
-                new Point(1, 0),
-                new Point(0, -1),
-                new Point(-1, 0),
-            };
-
-            for (int walker = 0; walker < walkerCount; walker++)
-            {
-                Point position = center;
-                long walkerSteps = totalSteps / walkerCount + (walker < totalSteps % walkerCount ? 1 : 0);
-                for (long step = 0; step < walkerSteps; step++)
-                {
-                    Point direction = directions[_random.Next(directions.Length)];
-                    position = new Point(
-                        Math.Clamp(position.X + direction.X, room.X, room.X + room.Width - 1),
-                        Math.Clamp(position.Y + direction.Y, room.Y, room.Y + room.Height - 1));
-                    grid[position.X, position.Y] = 0;
-                }
-            }
+            return true;
         }
 
-        // Verifica si un punto está dentro de una habitación
-        private bool IsPointInRoom(Point point, Rectangle room)
+        private Point FindFarthestReachablePoint(int[,] grid, Point start, out int pathLength)
         {
-            return point.X >= room.X && point.X < room.X + room.Width && 
-                   point.Y >= room.Y && point.Y < room.Y + room.Height;
+            bool[,] visited = FindReachableCells(grid, start, out int[,] distances);
+            Point farthest = start;
+            pathLength = 0;
+            for (int x = 0; x < _width; x++)
+            {
+                for (int y = 0; y < _height; y++)
+                {
+                    if (visited[x, y] && distances[x, y] > pathLength)
+                    {
+                        pathLength = distances[x, y];
+                        farthest = new Point(x, y);
+                    }
+                }
+            }
+
+            return farthest;
         }
 
-        private void GenerateCorridors(int[,] grid, List<Point> roomCenters)
+        private bool[,] FindReachableCells(int[,] grid, Point start, out int[,] distances)
         {
-            if (roomCenters.Count < 2) return;
+            distances = new int[_width, _height];
+            bool[,] visited = new bool[_width, _height];
+            Queue<Point> queue = new Queue<Point>();
+            queue.Enqueue(start);
+            visited[start.X, start.Y] = true;
+            Point[] directions = { new Point(0, 1), new Point(1, 0), new Point(0, -1), new Point(-1, 0) };
 
-            // Calcular grafo completo de distancias
-            List<Edge> edges = new List<Edge>();
-            for (int i = 0; i < roomCenters.Count; i++)
+            while (queue.Count > 0)
             {
-                for (int j = i + 1; j < roomCenters.Count; j++)
+                Point current = queue.Dequeue();
+                foreach (Point direction in directions)
                 {
-                    float distance = Vector2.Distance(
-                        new Vector2(roomCenters[i].X, roomCenters[i].Y),
-                        new Vector2(roomCenters[j].X, roomCenters[j].Y)
-                    );
-                    edges.Add(new Edge { From = i, To = j, Distance = distance });
+                    Point next = current + direction;
+                    if (next.X < 0 || next.X >= _width || next.Y < 0 || next.Y >= _height ||
+                        visited[next.X, next.Y] || grid[next.X, next.Y] != 0)
+                    {
+                        continue;
+                    }
+
+                    visited[next.X, next.Y] = true;
+                    distances[next.X, next.Y] = distances[current.X, current.Y] + 1;
+                    queue.Enqueue(next);
                 }
             }
 
-            edges.Sort();
-
-            UnionFind uf = new UnionFind(roomCenters.Count);
-            List<Edge> mstEdges = new List<Edge>();
-            List<Edge> remainingEdges = new List<Edge>();
-
-            foreach (Edge edge in edges)
-            {
-                if (uf.Find(edge.From) != uf.Find(edge.To))
-                {
-                    uf.Union(edge.From, edge.To);
-                    mstEdges.Add(edge);
-                }
-                else
-                {
-                    remainingEdges.Add(edge);
-                }
-            }
-
-            // Conectar aristas del MST
-            foreach (Edge edge in mstEdges)
-            {
-                RoomConnections.Add((edge.From, edge.To));
-                ConnectRooms(grid, roomCenters[edge.From], roomCenters[edge.To]);
-            }
-
-            // Flag / Opción: aristas extra para crear loops (evita pasillos únicos aburridos)
-            bool addLoops = true;
-            if (addLoops && remainingEdges.Count > 0)
-            {
-                int loopsToAdd = Math.Min(_random.Next(Settings.MinExtraLoops, Settings.MaxExtraLoops), remainingEdges.Count);
-                for (int i = 0; i < loopsToAdd; i++)
-                {
-                    int index = _random.Next(remainingEdges.Count);
-                    Edge extra = remainingEdges[index];
-                    RoomConnections.Add((extra.From, extra.To));
-                    ConnectRooms(grid, roomCenters[extra.From], roomCenters[extra.To]);
-                    remainingEdges.RemoveAt(index);
-                }
-            }
+            return visited;
         }
 
         private void ConnectRooms(int[,] grid, Point start, Point end)
@@ -554,53 +425,6 @@ namespace TwinStickShooter.Core
             return point.X >= 0 && point.X < _width && point.Y >= 0 && point.Y < _height;
         }
 
-        /// <summary>
-        /// Verifica que tanto el punto de salida como todos los centros de las habitaciones 
-        /// sean alcanzables desde el punto de inicio.
-        /// </summary>
-        private bool IsMapFullyTraversable(int[,] grid, Point start, Point end, List<Point> centers)
-        {
-            if (grid[start.X, start.Y] != 0 || grid[end.X, end.Y] != 0)
-                return false;
-
-            HashSet<Point> targets = new HashSet<Point>(centers);
-            targets.Add(end);
-
-            Queue<Point> queue = new Queue<Point>();
-            bool[,] visited = new bool[_width, _height];
-
-            queue.Enqueue(start);
-            visited[start.X, start.Y] = true;
-
-            int[,] directions = { { 0, 1 }, { 1, 0 }, { 0, -1 }, { -1, 0 } };
-
-            while (queue.Count > 0)
-            {
-                Point current = queue.Dequeue();
-
-                if (targets.Contains(current))
-                {
-                    targets.Remove(current);
-                    if (targets.Count == 0) return true;
-                }
-
-                for (int i = 0; i < 4; i++)
-                {
-                    int nx = current.X + directions[i, 0];
-                    int ny = current.Y + directions[i, 1];
-
-                    if (nx >= 0 && nx < _width && ny >= 0 && ny < _height &&
-                        grid[nx, ny] == 0 && !visited[nx, ny])
-                    {
-                        visited[nx, ny] = true;
-                        queue.Enqueue(new Point(nx, ny));
-                    }
-                }
-            }
-
-            return targets.Count == 0;
-        }
-
         private bool BFS(int[,] grid, Point start, Point end)
         {
             if (grid[start.X, start.Y] != 0 || grid[end.X, end.Y] != 0)
@@ -640,23 +464,5 @@ namespace TwinStickShooter.Core
             return false;
         }
 
-        public void TestMapTraversability(int mapCount = 50)
-        {
-            int validCount = 0;
-            for (int i = 0; i < mapCount; i++)
-            {
-                int[,] grid = GenerateMap();
-                if (IsMapTraversable(grid, SpawnPoint, ExitPoint))
-                {
-                    validCount++;
-                }
-            }
-            Console.WriteLine($"[MapGenerator] Baseline MST: {validCount}/{mapCount} mapas transitables directamente.");
-        }
-
-        public void Initialize()
-        {
-            TestMapTraversability(50);
-        }
     }
 }

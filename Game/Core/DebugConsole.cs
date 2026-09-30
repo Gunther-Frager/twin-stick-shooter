@@ -109,7 +109,7 @@ namespace TwinStickShooter.Core
 
             const int panelWidth = 440;
             const int lineHeight = 12;
-            int visibleLines = Math.Min(lines.Count, 18);
+            int visibleLines = Math.Min(lines.Count, 20);
             int x = GameConstants.ScreenWidth - panelWidth - Padding;
             int height = visibleLines * lineHeight + Padding * 2;
 

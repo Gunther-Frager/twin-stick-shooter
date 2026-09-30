@@ -10,7 +10,7 @@ namespace TwinStickShooter.Tests
         [Fact]
         public void FindPathDistance_ReturnsShortestWalkableCellPath()
         {
-            var generator = new MapGenerator(5, 5, 1);
+            var generator = new MapGenerator(5, 5);
             int[,] grid =
             {
                 { 0, 1, 0, 0, 0 },
@@ -26,8 +26,8 @@ namespace TwinStickShooter.Tests
         [Fact]
         public void GenerateMap_WithSameSeed_ProducesSameMapAndValidExitDistance()
         {
-            var first = new MapGenerator(30, 30, 80, new MapGenerationSettings { Seed = 1731 });
-            var second = new MapGenerator(30, 30, 80, new MapGenerationSettings { Seed = 1731 });
+            var first = new MapGenerator(30, 30, new MapGenerationSettings { Seed = 1731 });
+            var second = new MapGenerator(30, 30, new MapGenerationSettings { Seed = 1731 });
 
             int[,] firstMap = first.GenerateMap();
             int[,] secondMap = second.GenerateMap();
@@ -46,7 +46,7 @@ namespace TwinStickShooter.Tests
                 Seed = 9,
                 MaxGenerationAttempts = 2,
             };
-            var generator = new MapGenerator(30, 30, 80, settings);
+            var generator = new MapGenerator(30, 30, settings);
             int[,] previousMap = generator.GenerateMap();
             Point previousSpawn = generator.SpawnPoint;
             Point previousExit = generator.ExitPoint;
