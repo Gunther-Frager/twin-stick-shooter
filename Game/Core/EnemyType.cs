@@ -8,6 +8,9 @@ namespace TwinStickShooter.Core
         Swarmer,
         Turret,
         Roamer,
-        Spawner
+        Spawner,
+        Rusher,
+        StaticShooter,
+        MobileGenerator
     }
 }

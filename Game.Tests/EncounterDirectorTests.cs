@@ -8,6 +8,42 @@ namespace TwinStickShooter.Tests
 {
     public class EncounterDirectorTests
     {
+        [Theory]
+        [InlineData(EnemyType.Rusher, 1)]
+        [InlineData(EnemyType.StaticShooter, 3)]
+        [InlineData(EnemyType.MobileGenerator, 10)]
+        public void Plan_CanSelectEachNewArchetypeAtItsConfiguredCost(EnemyType expectedType, int cost)
+        {
+            var settings = new MapGenerationSettings
+            {
+                EncounterDifficultyBudget = cost,
+                EncounterMinGroupSize = 1,
+                EncounterMaxGroupSize = 1,
+                EncounterClusterRadius = 0f,
+                EncounterSpawnSafeDistance = 0f,
+                EncounterSwarmerCost = 100,
+                EncounterRusherCost = 100,
+                EncounterRoamerCost = 100,
+                EncounterTurretCost = 100,
+                EncounterStaticShooterCost = 100,
+                EncounterMobileGeneratorCost = 100,
+                EncounterSpawnerCost = 100,
+            };
+            switch (expectedType)
+            {
+                case EnemyType.Rusher: settings.EncounterRusherCost = cost; break;
+                case EnemyType.StaticShooter: settings.EncounterStaticShooterCost = cost; break;
+                case EnemyType.MobileGenerator: settings.EncounterMobileGeneratorCost = cost; break;
+            }
+
+            IReadOnlyList<EncounterSpawn> plan = EncounterDirector.Plan(
+                CreateFloorGrid(64, 64), CreateRooms(), new Point(5, 5), 10, settings);
+
+            Assert.NotEmpty(plan);
+            Assert.All(plan, spawn => Assert.Equal(expectedType, spawn.Type));
+            Assert.Equal(cost * plan.Count, plan.Sum(spawn => GetCost(spawn.Type, settings)));
+        }
+
         [Fact]
         public void Plan_RespectsDifficultyBudgetAndProducesUniquePositions()
         {
@@ -260,10 +296,16 @@ namespace TwinStickShooter.Tests
         {
             switch (type)
             {
+                case EnemyType.Rusher:
+                    return settings.EncounterRusherCost;
                 case EnemyType.Roamer:
                     return settings.EncounterRoamerCost;
                 case EnemyType.Turret:
                     return settings.EncounterTurretCost;
+                case EnemyType.StaticShooter:
+                    return settings.EncounterStaticShooterCost;
+                case EnemyType.MobileGenerator:
+                    return settings.EncounterMobileGeneratorCost;
                 case EnemyType.Spawner:
                     return settings.EncounterSpawnerCost;
                 default:

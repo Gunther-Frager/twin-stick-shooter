@@ -22,6 +22,7 @@ namespace TwinStickShooter.Rendering
         private int _outerGlowVertexCount;
         private VertexPositionColor[] _innerGlowVertices;
         private int _innerGlowVertexCount;
+        private int _builtPrimitiveMapRevision = -1;
         private LevelManager _levelManager;
 
         public ArenaRenderer(GraphicsDevice graphicsDevice, LevelManager levelManager)
@@ -103,6 +104,28 @@ namespace TwinStickShooter.Rendering
                     TriangulateContour(fillVertices, contour, wallFillColor);
             }
 
+            foreach (ArenaObstacle obstacle in _levelManager.ArenaObstacles)
+            {
+                MapCapsule capsule = obstacle.Capsule;
+                Color outlineColor;
+                Color fillColor;
+                if (obstacle.IsDestructible)
+                {
+                    outlineColor = obstacle.OutlineColor;
+                    fillColor = new Color(45, 30, 22, 220);
+                }
+                else
+                {
+                    outlineColor = obstacle.OutlineColor;
+                    fillColor = new Color(28, 35, 44, 235);
+                }
+
+                AddFilledCapsule(fillVertices, capsule.Start, capsule.End, capsule.Radius, fillColor, 18);
+                AddCapsule(vertices, capsule.Start, capsule.End, capsule.Radius, outlineColor, 18);
+                AddCapsule(outerGlowVertices, capsule.Start, capsule.End, capsule.Radius + 5f,
+                    new Color((int)outlineColor.R, (int)outlineColor.G, (int)outlineColor.B, 28), 18);
+            }
+
             // Spawn y salida
             Vector2 spawnPosition = _levelManager.GetSpawnPosition();
             Point spawnPoint = _levelManager.WorldToGrid(spawnPosition);
@@ -130,6 +153,7 @@ namespace TwinStickShooter.Rendering
             _outerGlowVertexCount = _outerGlowVertices.Length;
             _innerGlowVertices = innerGlowVertices.ToArray();
             _innerGlowVertexCount = _innerGlowVertices.Length;
+            _builtPrimitiveMapRevision = _levelManager.PrimitiveMapRevision;
         }
 
         private static void AddLine(List<VertexPositionColor> vertices, Vector3 a, Vector3 b, Color color)
@@ -388,6 +412,9 @@ namespace TwinStickShooter.Rendering
 
         public void Draw(Matrix viewMatrix)
         {
+            if (_builtPrimitiveMapRevision != _levelManager.PrimitiveMapRevision)
+                BuildArenaGeometry();
+
             _effect.View = viewMatrix;
             BlendState previousBlendState = _graphicsDevice.BlendState;
 

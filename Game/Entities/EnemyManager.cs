@@ -57,9 +57,7 @@ namespace TwinStickShooter.Entities
 
         public bool Spawn(Vector2 position, Vector2 velocity, EnemyType type = EnemyType.Swarmer)
         {
-            float radius = type == EnemyType.Spawner
-                ? GameConstants.SpawnerRadius
-                : GameConstants.EnemyRadius;
+            float radius = GetRadius(type);
             if (!_levelManager.IsPlayableAndWalkable(position, radius))
             {
                 return false;
@@ -75,19 +73,29 @@ namespace TwinStickShooter.Entities
             enemy.Position = position;
             enemy.Velocity = velocity;
             enemy.Radius = radius;
-            enemy.Color = Color.Red;
+            enemy.Color = GetColor(type);
+            enemy.Health = enemy.MaxHealth = GetHealth(type);
 
-            if (type == EnemyType.Roamer)
+            if (type == EnemyType.Roamer || type == EnemyType.Rusher || type == EnemyType.MobileGenerator)
             {
                 enemy.RoamDirection = Vector2.UnitX;
                 enemy.RoamChangeTimer = 0f;
             }
-            else if (type == EnemyType.Turret)
+            if (type == EnemyType.Turret)
             {
-                enemy.Health = enemy.MaxHealth = GameConstants.TurretHealth;
                 enemy.DetectionRange = GameConstants.TurretDetectionRange;
                 enemy.ShootCooldown = GameConstants.TurretShootCooldown;
                 enemy.ShootTimer = 0f;
+            }
+            else if (type == EnemyType.StaticShooter)
+            {
+                enemy.DetectionRange = GameConstants.StaticShooterDetectionRange;
+                enemy.ShootCooldown = GameConstants.StaticShooterShootCooldown;
+                enemy.ShootTimer = 0f;
+            }
+            else if (type == EnemyType.MobileGenerator)
+            {
+                enemy.ShootTimer = GameConstants.MobileGeneratorSpawnInterval;
             }
 
             return true;
@@ -171,10 +179,60 @@ namespace TwinStickShooter.Entities
                     case Core.EnemyType.Turret:
                         UpdateTurret(enemy, deltaTime, players, enemyBullets);
                         break;
+                    case Core.EnemyType.Rusher:
+                        UpdateRusher(enemy, deltaTime, players);
+                        break;
+                    case Core.EnemyType.StaticShooter:
+                        UpdateTurret(enemy, deltaTime, players, enemyBullets);
+                        break;
+                    case Core.EnemyType.MobileGenerator:
+                        UpdateMobileGenerator(enemy, deltaTime, players);
+                        break;
                     case Core.EnemyType.Spawner:
                         // Aún no implementados — se agregan en etapas siguientes.
                         break;
                 }
+            }
+        }
+
+        private static float GetRadius(EnemyType type)
+        {
+            switch (type)
+            {
+                case EnemyType.Rusher: return GameConstants.RusherRadius;
+                case EnemyType.StaticShooter: return GameConstants.StaticShooterRadius;
+                case EnemyType.MobileGenerator: return GameConstants.MobileGeneratorRadius;
+                case EnemyType.Turret: return GameConstants.StaticShooterRadius;
+                case EnemyType.Spawner: return GameConstants.SpawnerRadius;
+                default: return GameConstants.EnemyRadius;
+            }
+        }
+
+        private static float GetHealth(EnemyType type)
+        {
+            switch (type)
+            {
+                case EnemyType.Rusher: return GameConstants.RusherHealth;
+                case EnemyType.StaticShooter: return GameConstants.StaticShooterHealth;
+                case EnemyType.MobileGenerator: return GameConstants.MobileGeneratorHealth;
+                case EnemyType.Turret: return GameConstants.TurretHealth;
+                case EnemyType.Spawner: return GameConstants.SpawnerHealth;
+                default: return GameConstants.SwarmerHealth;
+            }
+        }
+
+        private static Color GetColor(EnemyType type)
+        {
+            switch (type)
+            {
+                case EnemyType.Swarmer: return new Color(245, 70, 85);
+                case EnemyType.Rusher: return new Color(255, 115, 45);
+                case EnemyType.Roamer: return new Color(250, 205, 55);
+                case EnemyType.Turret: return new Color(95, 205, 245);
+                case EnemyType.StaticShooter: return new Color(65, 135, 255);
+                case EnemyType.MobileGenerator: return new Color(80, 225, 125);
+                case EnemyType.Spawner: return new Color(205, 100, 255);
+                default: return Color.White;
             }
         }
 
@@ -230,6 +288,48 @@ namespace TwinStickShooter.Entities
 
             float angle = (float)Math.Atan2(direction.Y, direction.X);
             enemyBullets.Spawn(enemy.Position, angle, enemy.Color);
+        }
+
+        private void UpdateRusher(Enemy enemy, float deltaTime, Player[] players)
+        {
+            Player target = FindNearestActivePlayer(enemy.Position, players);
+            if (target == null) return;
+
+            Vector2 direction = target.Position - enemy.Position;
+            if (direction.LengthSquared() > 0.0001f)
+                direction.Normalize();
+            enemy.Position = PhysicsHelper.MoveWithCollision(
+                enemy,
+                direction * GameConstants.RusherSpeed * deltaTime,
+                _levelManager);
+        }
+
+        private void UpdateMobileGenerator(Enemy enemy, float deltaTime, Player[] players)
+        {
+            Player target = FindNearestActivePlayer(enemy.Position, players);
+            if (target != null)
+            {
+                Vector2 direction = target.Position - enemy.Position;
+                if (direction.LengthSquared() > 0.0001f)
+                    direction.Normalize();
+                enemy.Position = PhysicsHelper.MoveWithCollision(
+                    enemy,
+                    direction * GameConstants.MobileGeneratorSpeed * deltaTime,
+                    _levelManager);
+            }
+
+            enemy.ShootTimer -= deltaTime;
+            if (enemy.ShootTimer > 0f) return;
+            enemy.ShootTimer = GameConstants.MobileGeneratorSpawnInterval;
+
+            float startAngle = (float)(_random.NextDouble() * MathHelper.TwoPi);
+            for (int attempt = 0; attempt < 8; attempt++)
+            {
+                float angle = startAngle + attempt * MathHelper.TwoPi / 8f;
+                Vector2 offset = new Vector2((float)Math.Cos(angle), (float)Math.Sin(angle)) *
+                    (enemy.Radius + GameConstants.RusherRadius + 4f);
+                if (Spawn(enemy.Position + offset, Vector2.Zero, EnemyType.Rusher)) break;
+            }
         }
 
         /// <summary>Actualiza el movimiento y ciclo de vida de un Swarmer.</summary>

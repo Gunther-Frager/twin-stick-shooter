@@ -50,6 +50,17 @@ namespace TwinStickShooter.Core
         public static readonly bool StartInCombatTestScene = false;
         public const bool EnableDebugHotkeys = true;
         public const float EnemyRadius = 12f;
+        public const float RusherRadius = 10f;
+        public const float RusherSpeed = 220f;
+        public const float RusherHealth = 2f;
+        public const float StaticShooterRadius = 15f;
+        public const float StaticShooterHealth = 4f;
+        public const float StaticShooterDetectionRange = 520f;
+        public const float StaticShooterShootCooldown = 1.35f;
+        public const float MobileGeneratorRadius = 20f;
+        public const float MobileGeneratorSpeed = 48f;
+        public const float MobileGeneratorHealth = 24f;
+        public const float MobileGeneratorSpawnInterval = 4.5f;
 
         // --- Tipos de enemigos ---
         public const float SwarmerSpeed = 90f;
@@ -78,8 +89,8 @@ namespace TwinStickShooter.Core
         };
 
         // --- Mundo (Fase 3: mundo más grande que la pantalla) ---
-        public const int WorldWidth = 2400;
-        public const int WorldHeight = 2400;
+        public const int WorldWidth = 2640;
+        public const int WorldHeight = 2640;
 
         // --- Cámara (Fase 3: dinámica, sigue centro de masa + zoom automático) ---
         public const float CameraZoomMin = 0.35f;   // Máximo alejamiento
@@ -90,7 +101,7 @@ namespace TwinStickShooter.Core
         // --- Grilla de Colisiones (Fase 4: laberinto y colisiones) ---
         public const int GridWidth = 30;            // Coincide con el JSON
         public const int GridHeight = 30;           // Coincide con el JSON
-        public const int GridCellSize = WorldWidth / GridWidth;  // 2400/30 = 80 píxeles por celda
+        public const int GridCellSize = WorldWidth / GridWidth;  // 2640/30 = 88 píxeles por celda
         public const float RoundedContourRadiusScale = 0.35f;
         
         // --- Generación de mapas ---

@@ -53,4 +53,45 @@ public class CollisionWorldTests
         Assert.Empty(level.PrimitiveCapsules);
         Assert.Contains(level.PrimitiveCircles, c => c.Center.X > 60f && c.Center.X < 90f);
     }
+
+    [Fact]
+    public void GeneratedArenaCover_BreaksAfterConfiguredProjectileHits()
+    {
+        var level = new LevelManager(30, 30, 80);
+        MapGenerationSettings settings = level.MapGenerator.Settings;
+        settings.Seed = 301;
+        settings.CrawlerCount = 1;
+        settings.CrawlerMaxSteps = 120;
+        settings.CrawlerRoomInterval = 8;
+        settings.MinArenaCount = 1;
+        settings.MaxArenaCount = 1;
+        settings.MinimumSpawnExitPathLength = 8;
+        settings.ArenaRadiusMin = 3;
+        settings.ArenaRadiusMax = 3;
+        settings.ArenaObstacleMinSeeds = 1;
+        settings.ArenaObstacleMaxSeeds = 1;
+        settings.ArenaSolidCoreClusterChance = 0f;
+        settings.ArenaSolidObstacleChance = 0f;
+        settings.ArenaObstacleHitPoints = 5;
+
+        level.GenerateProceduralMap();
+
+        ArenaObstacle obstacle = Assert.Single(level.ArenaObstacles);
+        Vector2 impactPosition = (obstacle.Capsule.Start + obstacle.Capsule.End) * 0.5f;
+        Assert.True(obstacle.IsDestructible);
+        Assert.Equal(10f, obstacle.Capsule.Radius);
+        Assert.Equal(5, obstacle.HitPoints);
+        Assert.True(level.CheckCollision(impactPosition, 1f));
+
+        Color intactColor = obstacle.OutlineColor;
+        Assert.True(level.TryDamageDestructibleAt(impactPosition, Vector2.Zero, 1));
+        Assert.True(level.TryDamageDestructibleAt(impactPosition, Vector2.Zero, 1));
+        Assert.Equal(3, obstacle.HitPoints);
+        Assert.NotEqual(intactColor, obstacle.OutlineColor);
+        Assert.True(level.CheckCollision(impactPosition, 1f));
+
+        Assert.True(level.TryDamageDestructibleAt(impactPosition, Vector2.Zero, 3));
+        Assert.Empty(level.ArenaObstacles);
+        Assert.False(level.CheckCollision(impactPosition, 1f));
+    }
 }

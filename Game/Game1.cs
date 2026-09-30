@@ -62,7 +62,7 @@ namespace TwinStickShooter
         private bool _combatTestSceneActive;
         private bool _levelCompleted;
         private bool _exitWaitingMessageShown;
-        private int _lastPrefabRoomCount;
+        private int _lastArenaRoomCount;
         private int _lastBudgetedSpawnCount;
         private int _lastBudgetedGroupCount;
 
@@ -537,7 +537,7 @@ namespace TwinStickShooter
         private void SpawnEncounterPlan()
         {
             MapGenerator generator = _levelManager.MapGenerator;
-            _lastPrefabRoomCount = generator.PrefabRoomsPlaced;
+            _lastArenaRoomCount = generator.ArenaRoomsPlaced;
             _lastBudgetedSpawnCount = 0;
             _lastBudgetedGroupCount = 0;
             IReadOnlyList<EncounterSpawn> plan = EncounterDirector.Plan(
@@ -571,7 +571,7 @@ namespace TwinStickShooter
                 }
             }
 
-            Console.WriteLine($"[Game1] Prefabs: {generator.PrefabRoomsPlaced}, presupuesto: {_lastBudgetedSpawnCount} en {_lastBudgetedGroupCount} grupos, total: {_enemyManager.ActiveCount} enemigos y {_spawnerManager.ActiveCount} spawners");
+            Console.WriteLine($"[Game1] Arenas: {generator.ArenaRoomsPlaced}, presupuesto: {_lastBudgetedSpawnCount} en {_lastBudgetedGroupCount} grupos, total: {_enemyManager.ActiveCount} enemigos y {_spawnerManager.ActiveCount} spawners");
         }
 
         private void UpdateDeveloperPanelInput(KeyboardState keyboardState, float deltaTime)
@@ -581,9 +581,9 @@ namespace TwinStickShooter
             bool leftDown = keyboardState.IsKeyDown(Keys.Left);
             bool rightDown = keyboardState.IsKeyDown(Keys.Right);
             if (ShouldRepeatDeveloperKey(upDown, _previousUpDown, deltaTime, ref _upRepeatTimer))
-                _developerPanelSelection = (_developerPanelSelection + 13) % 14;
+                _developerPanelSelection = (_developerPanelSelection + 16) % 17;
             if (ShouldRepeatDeveloperKey(downDown, _previousDownDown, deltaTime, ref _downRepeatTimer))
-                _developerPanelSelection = (_developerPanelSelection + 1) % 14;
+                _developerPanelSelection = (_developerPanelSelection + 1) % 17;
             if (ShouldRepeatDeveloperKey(leftDown, _previousLeftDown, deltaTime, ref _leftRepeatTimer))
                 AdjustDeveloperSetting(-1);
             if (ShouldRepeatDeveloperKey(rightDown, _previousRightDown, deltaTime, ref _rightRepeatTimer))
@@ -636,10 +636,10 @@ namespace TwinStickShooter
                 case 1: settings.CrawlerMaxSteps = MathHelper.Clamp(settings.CrawlerMaxSteps + direction * 25, 25, 3000); break;
                 case 2: settings.CrawlerRoomInterval = MathHelper.Clamp(settings.CrawlerRoomInterval + direction * 5, 5, 250); break;
                 case 3:
-                    settings.MaxPrefabRooms = MathHelper.Clamp(settings.MaxPrefabRooms + direction, 0, 20);
-                    settings.MinPrefabRooms = Math.Min(settings.MinPrefabRooms, settings.MaxPrefabRooms);
+                    settings.MaxArenaCount = MathHelper.Clamp(settings.MaxArenaCount + direction, 0, 40);
+                    settings.MinArenaCount = Math.Min(settings.MinArenaCount, settings.MaxArenaCount);
                     break;
-                case 4: settings.MinPrefabRooms = MathHelper.Clamp(settings.MinPrefabRooms + direction, 0, settings.MaxPrefabRooms); break;
+                case 4: settings.MinArenaCount = MathHelper.Clamp(settings.MinArenaCount + direction, 0, settings.MaxArenaCount); break;
                 case 5: settings.EncounterSpawnSafeDistance = MathHelper.Clamp(settings.EncounterSpawnSafeDistance + direction * 0.25f, 0f, 20f); break;
                 case 6: settings.EncounterDifficultyBudget = MathHelper.Clamp(settings.EncounterDifficultyBudget + direction, 0, 100); break;
                 case 7: settings.EncounterMinGroupSize = MathHelper.Clamp(settings.EncounterMinGroupSize + direction, 1, settings.EncounterMaxGroupSize); break;
@@ -649,6 +649,9 @@ namespace TwinStickShooter
                 case 11: settings.EncounterRoamerCost = MathHelper.Clamp(settings.EncounterRoamerCost + direction, 1, 20); break;
                 case 12: settings.EncounterTurretCost = MathHelper.Clamp(settings.EncounterTurretCost + direction, 1, 20); break;
                 case 13: settings.EncounterSpawnerCost = MathHelper.Clamp(settings.EncounterSpawnerCost + direction, 1, 20); break;
+                case 14: settings.EncounterRusherCost = MathHelper.Clamp(settings.EncounterRusherCost + direction, 1, 20); break;
+                case 15: settings.EncounterStaticShooterCost = MathHelper.Clamp(settings.EncounterStaticShooterCost + direction, 1, 20); break;
+                case 16: settings.EncounterMobileGeneratorCost = MathHelper.Clamp(settings.EncounterMobileGeneratorCost + direction, 1, 30); break;
             }
         }
 
@@ -660,9 +663,9 @@ namespace TwinStickShooter
             {
                 $"RUTA MIN CELDAS: {settings.MinimumSpawnExitPathLength}",
                 $"CRAWLER PASOS MAX: {settings.CrawlerMaxSteps}",
-                $"PREFAB CADA PASOS: {settings.CrawlerRoomInterval}",
-                    $"SALAS PREFAB MAX: {settings.MaxPrefabRooms}",
-                    $"SALAS PREFAB MIN: {settings.MinPrefabRooms}",
+                $"ARENA CADA PASOS: {settings.CrawlerRoomInterval}",
+                $"ARENAS MAX: {settings.MaxArenaCount}",
+                $"ARENAS MIN: {settings.MinArenaCount}",
                 $"SAFE RADIO CELDAS: {settings.EncounterSpawnSafeDistance:0.##}",
                 $"PRESUPUESTO POR REGION: {settings.EncounterDifficultyBudget}",
                 $"GRUPO MIN: {settings.EncounterMinGroupSize}",
@@ -672,13 +675,16 @@ namespace TwinStickShooter
                 $"COSTO ROAMER: {settings.EncounterRoamerCost}",
                 $"COSTO TURRET: {settings.EncounterTurretCost}",
                 $"COSTO SPAWNER: {settings.EncounterSpawnerCost}",
+                $"COSTO RUSHER: {settings.EncounterRusherCost}",
+                $"COSTO TIRADOR FIJO: {settings.EncounterStaticShooterCost}",
+                $"COSTO GENERADOR MOVIL: {settings.EncounterMobileGeneratorCost}",
             };
             List<string> lines = new List<string>
             {
                 "F4 PANEL F5 MISMA SEED F6 NUEVA SEED Y MAPA",
                 "ARRIBA ABAJO ELEGIR IZQ DER CAMBIAR ESC SALIR",
                 $"SEED {settings.Seed} RUTA {generator.SpawnExitPathLength} CELDAS SALAS {generator.Rooms.Count}",
-                $"PASOS {generator.CrawlerStepCount} PREFABS {_lastPrefabRoomCount}/{generator.PrefabPlacementAttempts} INTENTOS",
+                $"PASOS {generator.CrawlerStepCount} ARENAS {_lastArenaRoomCount}/{generator.PrefabPlacementAttempts} INTENTOS",
                     $"APARICIONES {_lastBudgetedSpawnCount} EN {_lastBudgetedGroupCount} GRUPOS",
             };
             for (int i = 0; i < values.Length; i++)
@@ -695,10 +701,13 @@ namespace TwinStickShooter
             switch (selection)
             {
                 case 0: return "MINIMO BFS EN CELDAS INICIO A SALIDA. SI NO CUMPLE, NO REGENERA.";
-                case 1: return "PASOS QUE RECORRE EL UNICO CRAWLER ANTES DE TERMINAR.";
-                case 2: return "CADA CUANTOS PASOS INTENTA INSERTAR UNA SALA PREFAB.";
-                case 3: return "LIMITE DE SALAS PREFAB. CERO DEJA SOLO TUNELES CRAWLER.";
-                case 4: return "MINIMO GARANTIZADO SI HAY PLANTILLAS Y MAX ES MAYOR QUE CERO.";
+                case 1: return "PRESUPUESTO TOTAL DE PASOS, REPARTIDO ENTRE LOS CRAWLERS.";
+                case 2: return "CADA CUANTOS PASOS EL CRAWLER INTENTA ABRIR UNA ARENA.";
+                case 3: return "LIMITE DE ARENAS GENERADAS. CERO DEJA SOLO CORREDORES.";
+                case 4: return "MINIMO DE ARENAS QUE EL MAPA DEBE CONTENER.";
+                case 14: return "COSTO DE UN RUSHER QUE PERSIGUE AL JUGADOR.";
+                case 15: return "COSTO DE UN TIRADOR FIJO DE LARGO ALCANCE.";
+                case 16: return "COSTO DEL GENERADOR MOVIL, RESISTENTE Y CAPAZ DE DESPLEGAR RUSHERS.";
                 case 5: return "DISTANCIA MINIMA DESDE EL SPAWN, EN CELDAS (PASOS DE 0.25).";
                 case 6: return "PRESUPUESTO INDEPENDIENTE POR SALA O POR TODA LA RED DE TUNELES.";
                 case 7: return "MINIMO EN CADA GRUPO SI CABEN EL RADIO Y EL PRESUPUESTO.";

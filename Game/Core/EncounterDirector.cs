@@ -189,7 +189,36 @@ namespace TwinStickShooter.Core
                 }
             }
 
+            TrimToSpawnLimit(
+                plan,
+                Math.Min(GameConstants.MaxEnemies, Math.Max(0, settings.EncounterMaxInitialSpawnCount)),
+                minGroupSize);
             return plan.AsReadOnly();
+        }
+
+        private static void TrimToSpawnLimit(List<EncounterSpawn> plan, int limit, int minimumGroupSize)
+        {
+            while (plan.Count > limit)
+            {
+                int removableIndex = -1;
+                for (int i = plan.Count - 1; i >= 0; i--)
+                {
+                    int groupSize = 0;
+                    for (int j = 0; j < plan.Count; j++)
+                    {
+                        if (plan[j].ClusterId == plan[i].ClusterId) groupSize++;
+                    }
+
+                    if (groupSize > minimumGroupSize)
+                    {
+                        removableIndex = i;
+                        break;
+                    }
+                }
+
+                if (removableIndex < 0) break;
+                plan.RemoveAt(removableIndex);
+            }
         }
 
         private static bool IsCellInsideAnyRoom(int x, int y, IList<Rectangle> rooms)
@@ -207,8 +236,11 @@ namespace TwinStickShooter.Core
         {
             List<EnemyType> types = new List<EnemyType>();
             if (Math.Max(1, settings.EncounterSwarmerCost) <= budget) types.Add(EnemyType.Swarmer);
+            if (Math.Max(1, settings.EncounterRusherCost) <= budget) types.Add(EnemyType.Rusher);
             if (Math.Max(1, settings.EncounterRoamerCost) <= budget) types.Add(EnemyType.Roamer);
             if (Math.Max(1, settings.EncounterTurretCost) <= budget) types.Add(EnemyType.Turret);
+            if (Math.Max(1, settings.EncounterStaticShooterCost) <= budget) types.Add(EnemyType.StaticShooter);
+            if (Math.Max(1, settings.EncounterMobileGeneratorCost) <= budget) types.Add(EnemyType.MobileGenerator);
             if (Math.Max(1, settings.EncounterSpawnerCost) <= budget) types.Add(EnemyType.Spawner);
             return types;
         }
@@ -216,8 +248,10 @@ namespace TwinStickShooter.Core
         private static int GetMinimumCost(MapGenerationSettings settings)
         {
             return Math.Min(
-                Math.Min(Math.Max(1, settings.EncounterSwarmerCost), Math.Max(1, settings.EncounterRoamerCost)),
-                Math.Min(Math.Max(1, settings.EncounterTurretCost), Math.Max(1, settings.EncounterSpawnerCost)));
+                Math.Min(Math.Min(Math.Max(1, settings.EncounterSwarmerCost), Math.Max(1, settings.EncounterRusherCost)),
+                    Math.Min(Math.Max(1, settings.EncounterRoamerCost), Math.Max(1, settings.EncounterTurretCost))),
+                Math.Min(Math.Min(Math.Max(1, settings.EncounterStaticShooterCost), Math.Max(1, settings.EncounterMobileGeneratorCost)),
+                    Math.Max(1, settings.EncounterSpawnerCost)));
         }
 
         private static int GetCost(EnemyType type, MapGenerationSettings settings)
@@ -226,8 +260,14 @@ namespace TwinStickShooter.Core
             {
                 case EnemyType.Roamer:
                     return Math.Max(1, settings.EncounterRoamerCost);
+                case EnemyType.Rusher:
+                    return Math.Max(1, settings.EncounterRusherCost);
                 case EnemyType.Turret:
                     return Math.Max(1, settings.EncounterTurretCost);
+                case EnemyType.StaticShooter:
+                    return Math.Max(1, settings.EncounterStaticShooterCost);
+                case EnemyType.MobileGenerator:
+                    return Math.Max(1, settings.EncounterMobileGeneratorCost);
                 case EnemyType.Spawner:
                     return Math.Max(1, settings.EncounterSpawnerCost);
                 default:

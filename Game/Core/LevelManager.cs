@@ -20,6 +20,7 @@ namespace TwinStickShooter.Core
         private readonly List<MapCircle> _primitiveCircles = new List<MapCircle>();
         private readonly List<MapCapsule> _primitiveCapsules = new List<MapCapsule>();
         private readonly List<MapRoundedPoly> _primitiveRoundedPolys = new List<MapRoundedPoly>();
+        private readonly List<ArenaObstacle> _arenaObstacles = new List<ArenaObstacle>();
         private bool _primitiveMapInitialized;
         private MapGenerator _mapGenerator;
         public MapGenerator MapGenerator => _mapGenerator;
@@ -40,8 +41,10 @@ namespace TwinStickShooter.Core
         public IReadOnlyList<MapCapsule> PrimitiveCapsules => _primitiveCapsules;
         public bool UseRoundedContours { get; set; } = true;
         public IReadOnlyList<MapRoundedPoly> PrimitiveRoundedPolys => _primitiveRoundedPolys;
+        public IReadOnlyList<ArenaObstacle> ArenaObstacles => _arenaObstacles;
         public float WorldWidth => _gridWidth * _cellSize;
         public float WorldHeight => _gridHeight * _cellSize;
+        public int PrimitiveMapRevision { get; private set; }
         public bool HasPrimitiveMapData() => _primitiveMapInitialized;
 
         /// <summary>
@@ -57,8 +60,48 @@ namespace TwinStickShooter.Core
             }
         }
 
+        public bool TryDamageDestructibleAt(Vector2 hitPosition, Vector2 hitNormal, int damage)
+        {
+            if (damage <= 0) return false;
+
+            Vector2 normal = hitNormal.LengthSquared() > 0.000001f
+                ? Vector2.Normalize(hitNormal)
+                : Vector2.Zero;
+            float bestScore = float.MaxValue;
+            int bestIndex = -1;
+            for (int i = 0; i < _arenaObstacles.Count; i++)
+            {
+                ArenaObstacle obstacle = _arenaObstacles[i];
+                if (!obstacle.IsDestructible) continue;
+
+                MapCapsule capsule = obstacle.Capsule;
+                Vector2 closest = ClosestPointOnSegment(hitPosition, capsule.Start, capsule.End);
+                Vector2 offset = closest - hitPosition;
+                float distanceSquared = offset.LengthSquared();
+                float hitReach = capsule.Radius + GameConstants.BulletRadius + 2f;
+                if (distanceSquared > hitReach * hitReach) continue;
+                if (normal != Vector2.Zero && Vector2.Dot(offset, -normal) <= 0f) continue;
+
+                if (distanceSquared < bestScore)
+                {
+                    bestScore = distanceSquared;
+                    bestIndex = i;
+                }
+            }
+
+            if (bestIndex < 0) return false;
+
+            ArenaObstacle hitObstacle = _arenaObstacles[bestIndex];
+            bool destroyed = hitObstacle.ApplyDamage(damage);
+            if (destroyed) _arenaObstacles.RemoveAt(bestIndex);
+            PrimitiveMapRevision++;
+
+            return true;
+        }
+
         public void ConfigureCombatTestArena()
         {
+            _arenaObstacles.Clear();
             for (int x = 0; x < _gridWidth; x++)
             {
                 for (int y = 0; y < _gridHeight; y++)
@@ -104,6 +147,15 @@ namespace TwinStickShooter.Core
                 {
                     return true;
                 }
+            }
+
+            foreach (ArenaObstacle obstacle in _arenaObstacles)
+            {
+                MapCapsule capsule = obstacle.Capsule;
+                Vector2 closest = ClosestPointOnSegment(position, capsule.Start, capsule.End);
+                float combinedRadius = radius + capsule.Radius;
+                if (Vector2.DistanceSquared(position, closest) <= combinedRadius * combinedRadius)
+                    return true;
             }
 
             foreach (var poly in _primitiveRoundedPolys)
@@ -169,6 +221,31 @@ namespace TwinStickShooter.Core
                 float combinedRadius = radius + capsule.Radius;
                 if (distanceSquared >= combinedRadius * combinedRadius)
                     continue;
+
+                float distance = MathF.Sqrt(distanceSquared);
+                float overlap = combinedRadius - distance;
+                Vector2 axis = capsule.End - capsule.Start;
+                Vector2 fallback = axis.LengthSquared() > 0.0001f
+                    ? Vector2.Normalize(new Vector2(-axis.Y, axis.X))
+                    : Vector2.UnitX;
+                Vector2 candidate = distance > 0.0001f
+                    ? offset * ((overlap + PenetrationSeparationEpsilon) / distance)
+                    : fallback * (overlap + PenetrationSeparationEpsilon);
+                if (overlap > deepestOverlap)
+                {
+                    deepestOverlap = overlap;
+                    pushOut = candidate;
+                }
+            }
+
+            foreach (ArenaObstacle obstacle in _arenaObstacles)
+            {
+                MapCapsule capsule = obstacle.Capsule;
+                Vector2 closest = ClosestPointOnSegment(center, capsule.Start, capsule.End);
+                Vector2 offset = center - closest;
+                float distanceSquared = offset.LengthSquared();
+                float combinedRadius = radius + capsule.Radius;
+                if (distanceSquared >= combinedRadius * combinedRadius) continue;
 
                 float distance = MathF.Sqrt(distanceSquared);
                 float overlap = combinedRadius - distance;
@@ -383,6 +460,7 @@ namespace TwinStickShooter.Core
             _primitiveCircles.Clear();
             _primitiveCapsules.Clear();
             _primitiveRoundedPolys.Clear();
+            _arenaObstacles.Clear();
             _primitiveMapInitialized = true;
 
             if (definition == null)
@@ -491,6 +569,7 @@ namespace TwinStickShooter.Core
 
             _primitiveMapInitialized = true;
             RebuildPlayableArea();
+            PrimitiveMapRevision++;
         }
 
         private void RebuildPlayableArea()
@@ -621,12 +700,25 @@ namespace TwinStickShooter.Core
         public void GenerateProceduralMap()
         {
             int[,] generatedGrid = _mapGenerator.GenerateMap();
+            _arenaObstacles.Clear();
             for (int x = 0; x < _gridWidth; x++)
             {
                 for (int y = 0; y < _gridHeight; y++)
                 {
                     _collisionGrid[x, y] = generatedGrid[x, y] == 1;
                 }
+            }
+
+            foreach (ArenaObstacleDefinition definition in _mapGenerator.ArenaObstacles)
+            {
+                MapCapsule capsule = definition.CapsuleInTiles;
+                MapCapsule worldCapsule = new MapCapsule
+                {
+                    Start = capsule.Start * _cellSize,
+                    End = capsule.End * _cellSize,
+                    Radius = capsule.Radius * _cellSize,
+                };
+                _arenaObstacles.Add(new ArenaObstacle(worldCapsule, definition.IsDestructible, definition.HitPoints));
             }
 
             RebuildPrimitiveMapFromGrid();

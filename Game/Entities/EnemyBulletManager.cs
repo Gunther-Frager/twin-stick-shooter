@@ -66,10 +66,11 @@ namespace TwinStickShooter.Entities
                     bullet.Radius,
                     out Vector2 hitPosition,
                     out Vector2 hitNormal);
+                bool hitDestructible = hitWall && _levelManager.TryDamageDestructibleAt(hitPosition, hitNormal, 1);
                 bullet.Position = hitWall ? hitPosition : nextPosition;
                 bool bounced = false;
 
-                if (hitWall && bullet.RemainingBounces > 0 && hitNormal.LengthSquared() > 0.000001f)
+                if (hitWall && !hitDestructible && bullet.RemainingBounces > 0 && hitNormal.LengthSquared() > 0.000001f)
                 {
                     bullet.Velocity = Vector2.Reflect(bullet.Velocity, hitNormal);
                     bullet.RemainingBounces--;
