@@ -299,9 +299,22 @@ namespace TwinStickShooter.Core
                 _playableArea[gridPosition.X, gridPosition.Y];
         }
 
+        /// <summary>Devuelve el ID regional de una posición o -1 si está en un pasillo común.</summary>
+        public int GetRegionIdAt(Vector2 worldPosition)
+        {
+            Point cell = WorldToGrid(worldPosition);
+            return _mapGenerator.GetRegionId(cell);
+        }
+
         public bool IsPlayableAndWalkable(Vector2 worldPosition, float radius)
         {
             return IsInPlayableArea(worldPosition) && IsWalkable(worldPosition, radius);
+        }
+
+        /// <summary>Comprueba visión directa contra la misma geometría que bloquea el movimiento.</summary>
+        public bool HasLineOfSight(Vector2 start, Vector2 end)
+        {
+            return !TrySweepCircle(start, end, 0.5f, out _, out _);
         }
 
         public bool TrySweepCircle(Vector2 start, Vector2 end, float radius, out Vector2 hitPosition, out Vector2 hitNormal)

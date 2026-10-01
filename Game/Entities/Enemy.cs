@@ -17,6 +17,10 @@ namespace TwinStickShooter.Entities
         public Color Color { get; set; }
         public Vector2 Velocity;
         public EnemyType Type;
+        /// <summary>Consciencia de IA; es independiente de Active, que indica uso del pool.</summary>
+        public EnemyAwarenessState AwarenessState;
+        /// <summary>Región propietaria, heredada por las unidades que genera.</summary>
+        public int RegionId;
         public float Health;
         public float MaxHealth;
         public float ShootCooldown;
@@ -33,6 +37,8 @@ namespace TwinStickShooter.Entities
             Radius = GameConstants.EnemyRadius;
             Color = Color.Red;
             Type = EnemyType.Swarmer;
+            AwarenessState = EnemyAwarenessState.Active;
+            RegionId = -1;
             Health = GameConstants.SwarmerHealth;
             MaxHealth = GameConstants.SwarmerHealth;
             ShootCooldown = 0f;

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Microsoft.Xna.Framework;
 using TwinStickShooter.Core;
 
@@ -14,13 +15,18 @@ namespace TwinStickShooter.Entities
         private readonly ObjectPool<Enemy> _pool;
         private readonly LevelManager _levelManager;
         private readonly Random _random;
+        private readonly HashSet<int> _activatedRegions = new HashSet<int>();
 
         public EnemyManager(LevelManager levelManager)
         {
-            _pool = new ObjectPool<Enemy>(GameConstants.MaxEnemies);
+            int capacity = Math.Max(1, levelManager.MapGenerator.Settings.EnemyPoolCapacity);
+            _pool = new ObjectPool<Enemy>(capacity);
             _levelManager = levelManager;
             _random = new Random();
         }
+
+        /// <summary>Capacidad preasignada de actores móviles.</summary>
+        public int Capacity => _pool.Capacity;
 
         /// <summary>Array fijo de enemigos (activas e inactivas); usado por el renderer.</summary>
         public Enemy[] Enemies => _pool.Items;
@@ -53,9 +59,10 @@ namespace TwinStickShooter.Entities
                     _pool.Release(_pool.Items[i].PoolIndex);
                 }
             }
+            _activatedRegions.Clear();
         }
 
-        public bool Spawn(Vector2 position, Vector2 velocity, EnemyType type = EnemyType.Swarmer)
+        public bool Spawn(Vector2 position, Vector2 velocity, EnemyType type = EnemyType.Swarmer, int regionId = -1)
         {
             float radius = GetRadius(type);
             if (!_levelManager.IsPlayableAndWalkable(position, radius))
@@ -70,6 +77,10 @@ namespace TwinStickShooter.Entities
 
             enemy.PoolIndex = index;
             enemy.Type = type;
+            enemy.RegionId = regionId;
+            enemy.AwarenessState = regionId < 0 || _activatedRegions.Contains(regionId)
+                ? EnemyAwarenessState.Active
+                : EnemyAwarenessState.Dormant;
             enemy.Position = position;
             enemy.Velocity = velocity;
             enemy.Radius = radius;
@@ -101,6 +112,21 @@ namespace TwinStickShooter.Entities
             return true;
         }
 
+        /// <summary>Despierta una sola vez a todas las entidades asignadas a la región.</summary>
+        public bool ActivateRegion(int regionId)
+        {
+            if (regionId <= 0 || !_activatedRegions.Add(regionId)) return false;
+
+            for (int i = 0; i < _pool.Items.Length; i++)
+            {
+                Enemy enemy = _pool.Items[i];
+                if (enemy.Active && enemy.RegionId == regionId)
+                    enemy.AwarenessState = EnemyAwarenessState.Active;
+            }
+
+            return true;
+        }
+
         public int CountNear(Vector2 position, float radius)
         {
             float radiusSquared = radius * radius;
@@ -113,6 +139,19 @@ namespace TwinStickShooter.Entities
                     count++;
                 }
             }
+            return count;
+        }
+
+        /// <summary>Cuenta slots vivos, incluidos Dormant y descendientes, asignados a la región.</summary>
+        public int GetAliveCountInRegion(int regionId)
+        {
+            int count = 0;
+            for (int i = 0; i < _pool.Items.Length; i++)
+            {
+                Enemy enemy = _pool.Items[i];
+                if (enemy.Active && enemy.RegionId == regionId) count++;
+            }
+
             return count;
         }
 
@@ -154,7 +193,11 @@ namespace TwinStickShooter.Entities
             return -1;
         }
 
-        public void Update(float deltaTime, Player[] players, EnemyBulletManager enemyBullets)
+        public void Update(
+            float deltaTime,
+            Player[] players,
+            EnemyBulletManager enemyBullets,
+            Rectangle? visibleWorldBounds = null)
         {
             Enemy[] items = _pool.Items;
             int activeEnemies = 0;
@@ -164,6 +207,11 @@ namespace TwinStickShooter.Entities
                 Enemy enemy = items[i];
                 if (!enemy.Active)
                 {
+                    continue;
+                }
+                if (enemy.AwarenessState == EnemyAwarenessState.Dormant)
+                {
+                    UpdateDormantPatrol(enemy, deltaTime);
                     continue;
                 }
                 activeEnemies++;
@@ -177,13 +225,13 @@ namespace TwinStickShooter.Entities
                         UpdateRoamer(enemy, deltaTime);
                         break;
                     case Core.EnemyType.Turret:
-                        UpdateTurret(enemy, deltaTime, players, enemyBullets);
+                        UpdateTurret(enemy, deltaTime, players, enemyBullets, visibleWorldBounds);
                         break;
                     case Core.EnemyType.Rusher:
                         UpdateRusher(enemy, deltaTime, players);
                         break;
                     case Core.EnemyType.StaticShooter:
-                        UpdateTurret(enemy, deltaTime, players, enemyBullets);
+                        UpdateTurret(enemy, deltaTime, players, enemyBullets, visibleWorldBounds);
                         break;
                     case Core.EnemyType.MobileGenerator:
                         UpdateMobileGenerator(enemy, deltaTime, players);
@@ -193,6 +241,68 @@ namespace TwinStickShooter.Entities
                         break;
                 }
             }
+        }
+
+        /// <summary>Separa cuerpos por posición y aplica slow, sin alterar salud ni velocidad residual.</summary>
+        public int ResolvePlayerContacts(Player[] players)
+        {
+            int contactCount = 0;
+            for (int playerIndex = 0; playerIndex < players.Length; playerIndex++)
+            {
+                Player player = players[playerIndex];
+                if (!player.IsActive) continue;
+
+                for (int enemyIndex = 0; enemyIndex < _pool.Items.Length; enemyIndex++)
+                {
+                    Enemy enemy = _pool.Items[enemyIndex];
+                    if (!enemy.Active) continue;
+
+                    float combinedRadius = player.Radius + enemy.Radius;
+                    Vector2 offset = player.Position - enemy.Position;
+                    float distanceSquared = offset.LengthSquared();
+                    if (distanceSquared >= combinedRadius * combinedRadius) continue;
+
+                    float distance = MathF.Sqrt(distanceSquared);
+                    Vector2 normal = distance > 0.0001f ? offset / distance : Vector2.UnitX;
+                    Vector2 separation = normal * (combinedRadius - distance + 0.01f);
+                    player.Position = PhysicsHelper.MoveWithCollision(player, separation, _levelManager);
+                    player.ApplyContactSlow();
+                    contactCount++;
+                }
+            }
+
+            return contactCount;
+        }
+
+        /// <summary>La patrulla Dormant solo acepta posiciones cuyo ownership siga siendo su región.</summary>
+        private void UpdateDormantPatrol(Enemy enemy, float deltaTime)
+        {
+            if (enemy.Type == EnemyType.Turret || enemy.Type == EnemyType.StaticShooter ||
+                enemy.Type == EnemyType.Spawner || enemy.Type == EnemyType.Swarmer)
+                return;
+
+            enemy.RoamChangeTimer -= deltaTime;
+            if (enemy.RoamChangeTimer <= 0f)
+            {
+                float angle = (float)(_random.NextDouble() * MathHelper.TwoPi);
+                enemy.RoamDirection = new Vector2((float)Math.Cos(angle), (float)Math.Sin(angle));
+                enemy.RoamChangeTimer = GameConstants.RoamerDirectionChangeMinSeconds +
+                    (float)_random.NextDouble() *
+                    (GameConstants.RoamerDirectionChangeMaxSeconds - GameConstants.RoamerDirectionChangeMinSeconds);
+            }
+
+            float patrolSpeed = enemy.Type == EnemyType.MobileGenerator
+                ? GameConstants.MobileGeneratorSpeed
+                : enemy.Type == EnemyType.Rusher ? GameConstants.RusherSpeed * 0.35f : GameConstants.RoamerSpeed;
+            Vector2 candidate = PhysicsHelper.MoveWithCollision(enemy, enemy.RoamDirection * patrolSpeed * deltaTime, _levelManager);
+            if (_levelManager.MapGenerator.GetRegionId(_levelManager.WorldToGrid(candidate)) == enemy.RegionId)
+            {
+                enemy.Position = candidate;
+                return;
+            }
+
+            enemy.RoamDirection = -enemy.RoamDirection;
+            enemy.RoamChangeTimer = 0f;
         }
 
         private static float GetRadius(EnemyType type)
@@ -259,16 +369,21 @@ namespace TwinStickShooter.Entities
             return nearest;
         }
 
-        private void UpdateTurret(Enemy enemy, float deltaTime, Player[] players, EnemyBulletManager enemyBullets)
+        private void UpdateTurret(
+            Enemy enemy,
+            float deltaTime,
+            Player[] players,
+            EnemyBulletManager enemyBullets,
+            Rectangle? visibleWorldBounds)
         {
-            Player target = FindNearestActivePlayer(enemy.Position, players);
+            Player target = FindNearestShootablePlayer(enemy, players, visibleWorldBounds);
             if (target == null)
             {
                 return;
             }
 
             float distance = Vector2.Distance(enemy.Position, target.Position);
-            if (distance > enemy.DetectionRange)
+            if (!visibleWorldBounds.HasValue && distance > enemy.DetectionRange)
             {
                 return;
             }
@@ -288,6 +403,29 @@ namespace TwinStickShooter.Entities
 
             float angle = (float)Math.Atan2(direction.Y, direction.X);
             enemyBullets.Spawn(enemy.Position, angle, enemy.Color);
+        }
+
+        private Player FindNearestShootablePlayer(Enemy enemy, Player[] players, Rectangle? visibleWorldBounds)
+        {
+            Player nearest = null;
+            float bestDistanceSquared = float.MaxValue;
+            for (int i = 0; i < players.Length; i++)
+            {
+                Player player = players[i];
+                if (!player.IsActive) continue;
+
+                if (visibleWorldBounds.HasValue && !visibleWorldBounds.Value.Contains(player.Position.ToPoint()))
+                    continue;
+
+                if (!_levelManager.HasLineOfSight(enemy.Position, player.Position)) continue;
+
+                float distanceSquared = Vector2.DistanceSquared(enemy.Position, player.Position);
+                if (distanceSquared >= bestDistanceSquared) continue;
+                bestDistanceSquared = distanceSquared;
+                nearest = player;
+            }
+
+            return nearest;
         }
 
         private void UpdateRusher(Enemy enemy, float deltaTime, Player[] players)
@@ -328,7 +466,7 @@ namespace TwinStickShooter.Entities
                 float angle = startAngle + attempt * MathHelper.TwoPi / 8f;
                 Vector2 offset = new Vector2((float)Math.Cos(angle), (float)Math.Sin(angle)) *
                     (enemy.Radius + GameConstants.RusherRadius + 4f);
-                if (Spawn(enemy.Position + offset, Vector2.Zero, EnemyType.Rusher)) break;
+                if (Spawn(enemy.Position + offset, Vector2.Zero, EnemyType.Rusher, enemy.RegionId)) break;
             }
         }
 

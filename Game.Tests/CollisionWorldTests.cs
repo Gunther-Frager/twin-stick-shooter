@@ -94,4 +94,22 @@ public class CollisionWorldTests
         Assert.Empty(level.ArenaObstacles);
         Assert.False(level.CheckCollision(impactPosition, 1f));
     }
+
+    [Fact]
+    public void LineOfSight_UsesTheSameWallGeometryAsCollision()
+    {
+        var level = new LevelManager(20, 20, 20)
+        {
+            UseRoundedContours = false,
+        };
+        level.SetCollision(10, 8, true);
+        level.SetCollision(10, 9, true);
+        level.SetCollision(10, 10, true);
+        level.SetCollision(10, 11, true);
+        level.SetCollision(10, 12, true);
+        level.RebuildPrimitiveMapFromGrid();
+
+        Assert.False(level.HasLineOfSight(new Vector2(100f, 200f), new Vector2(300f, 200f)));
+        Assert.True(level.HasLineOfSight(new Vector2(100f, 100f), new Vector2(300f, 100f)));
+    }
 }

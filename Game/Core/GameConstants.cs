@@ -19,6 +19,8 @@ namespace TwinStickShooter.Core
         public const float PlayerRadius = 16f;
         public const float PlayerMaxHealth = 100f;
         public const float PlayerInvulnerabilitySeconds = 0.5f;
+        public const float ContactSlowMultiplier = 0.7f; // Velocidad residual mientras dura el contacto.
+        public const float ContactSlowDurationSeconds = 0.4f; // El contacto continuo solo refresca este timer.
 
         // --- Input ---
         // Deadzone radial: por debajo de este magnitud, el stick se considera en reposo.
@@ -45,7 +47,7 @@ namespace TwinStickShooter.Core
         public const float MuzzleParticleSize = 6f;
 
         // --- Enemigos (Fase 5: IA básica) ---
-        public const int MaxEnemies = 64;
+        public const int MaxEnemies = 1024;
         public const int MaxSpawners = 16;
         public static readonly bool StartInCombatTestScene = false;
         public const bool EnableDebugHotkeys = true;

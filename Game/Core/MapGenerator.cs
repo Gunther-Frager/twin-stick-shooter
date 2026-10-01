@@ -14,6 +14,7 @@ namespace TwinStickShooter.Core
         private readonly int _height;
         private Random _random;
         private List<RoomTemplateData> _roomTemplates = new List<RoomTemplateData>();
+        private readonly List<MapRegionKind> _roomKinds = new List<MapRegionKind>();
 
         public MapGenerationSettings Settings { get; }
         public Point SpawnPoint { get; private set; }
@@ -24,10 +25,18 @@ namespace TwinStickShooter.Core
         public int PrefabPlacementAttempts { get; private set; }
         public int PrefabRoomsPlaced { get; private set; }
         public int ArenaRoomsPlaced => PrefabRoomsPlaced;
+        /// <summary>Cantidad de cavidades laterales añadidas en la pasada posterior al crawler.</summary>
+        public int PocketRoomsPlaced { get; private set; }
+        public int PocketPlacementAttempts { get; private set; }
         public List<Rectangle> Rooms { get; private set; } = new List<Rectangle>();
         public List<(int From, int To)> RoomConnections { get; } = new List<(int From, int To)>();
         public MapZoneType[,] ZoneMap { get; private set; }
+        /// <summary>ID regional por celda transitable; -1 identifica paredes y pasillos comunes.</summary>
+        public int[,] RegionIdMap { get; private set; }
+        /// <summary>Arenas y pockets con depth/budget deterministas desde el spawn.</summary>
+        public IReadOnlyList<MapRegionDefinition> Regions => _regions;
         public List<ArenaObstacleDefinition> ArenaObstacles { get; } = new List<ArenaObstacleDefinition>();
+        private readonly List<MapRegionDefinition> _regions = new List<MapRegionDefinition>();
 
         public MapGenerator(int width, int height, MapGenerationSettings settings = null)
         {
@@ -36,6 +45,8 @@ namespace TwinStickShooter.Core
             Settings = settings ?? new MapGenerationSettings();
             _random = new Random(Settings.Seed);
             ZoneMap = new MapZoneType[width, height];
+            RegionIdMap = new int[width, height];
+            ClearRegionIds();
         }
 
         public void SetRoomTemplates(List<RoomTemplateData> templates)
@@ -51,9 +62,14 @@ namespace TwinStickShooter.Core
             int previousStepCount = CrawlerStepCount;
             int previousPlacementAttempts = PrefabPlacementAttempts;
             int previousPrefabRoomsPlaced = PrefabRoomsPlaced;
+            int previousPocketRoomsPlaced = PocketRoomsPlaced;
+            int previousPocketPlacementAttempts = PocketPlacementAttempts;
             List<Rectangle> previousRooms = Rooms.ToList();
+            List<MapRegionKind> previousRoomKinds = _roomKinds.ToList();
             List<(int From, int To)> previousConnections = RoomConnections.ToList();
             MapZoneType[,] previousZones = (MapZoneType[,])ZoneMap.Clone();
+            int[,] previousRegionIds = (int[,])RegionIdMap.Clone();
+            List<MapRegionDefinition> previousRegions = _regions.ToList();
             List<ArenaObstacleDefinition> previousArenaObstacles = ArenaObstacles.ToList();
             int[,] grid = new int[_width, _height];
             LastGenerationFailure = null;
@@ -68,7 +84,12 @@ namespace TwinStickShooter.Core
                 CrawlerStepCount = 0;
                 PrefabPlacementAttempts = 0;
                 PrefabRoomsPlaced = 0;
+                PocketRoomsPlaced = 0;
+                PocketPlacementAttempts = 0;
                 ArenaObstacles.Clear();
+                _roomKinds.Clear();
+                _regions.Clear();
+                ClearRegionIds();
 
                 // El crawler excava desde la sala inicial; los prefabs nacen conectados a su recorrido.
                 for (int x = 0; x < _width; x++)
@@ -83,14 +104,18 @@ namespace TwinStickShooter.Core
                 if (!GrowCrawlerMap(grid) || ArenaRoomsPlaced < requiredArenaRooms) continue;
 
                 ClassifyZones(grid);
+                // El budget se calcula una vez sobre la topología terminada y se comparte con la reserva de cobertura.
+                BuildRegionOwnership(grid);
                 IReadOnlyList<EncounterSpawn> encounterPlan = EncounterDirector.Plan(
                     grid,
-                    Rooms,
+                    RegionIdMap,
+                    Regions,
                     SpawnPoint,
                     GameConstants.GridCellSize,
                     Settings);
                 AddArenaObstacles(grid, encounterPlan);
                 ClassifyZones(grid);
+                BuildRegionOwnership(grid);
                 ExitPoint = FindFarthestReachablePoint(grid, SpawnPoint, out int routeLength);
                 SpawnExitPathLength = routeLength;
                 if (SpawnExitPathLength >= Settings.MinimumSpawnExitPathLength &&
@@ -110,13 +135,191 @@ namespace TwinStickShooter.Core
             CrawlerStepCount = previousStepCount;
             PrefabPlacementAttempts = previousPlacementAttempts;
             PrefabRoomsPlaced = previousPrefabRoomsPlaced;
+            PocketRoomsPlaced = previousPocketRoomsPlaced;
+            PocketPlacementAttempts = previousPocketPlacementAttempts;
             Rooms = previousRooms;
+            _roomKinds.Clear();
+            _roomKinds.AddRange(previousRoomKinds);
             RoomConnections.Clear();
             RoomConnections.AddRange(previousConnections);
             ZoneMap = previousZones;
+            RegionIdMap = previousRegionIds;
+            _regions.Clear();
+            _regions.AddRange(previousRegions);
             ArenaObstacles.Clear();
             ArenaObstacles.AddRange(previousArenaObstacles);
             throw new InvalidOperationException(LastGenerationFailure);
+        }
+
+        private void ClearRegionIds()
+        {
+            for (int x = 0; x < _width; x++)
+            {
+                for (int y = 0; y < _height; y++)
+                    RegionIdMap[x, y] = -1;
+            }
+        }
+
+        /// <summary>Asigna IDs a suelo de arena/pocket y ownership a sus umbrales.</summary>
+        private void BuildRegionOwnership(int[,] grid)
+        {
+            _regions.Clear();
+            ClearRegionIds();
+            int[] depths = GetRoomDepths();
+
+            for (int roomIndex = 0; roomIndex < Rooms.Count; roomIndex++)
+            {
+                Rectangle bounds = Rooms[roomIndex];
+                MapRegionKind kind = _roomKinds[roomIndex];
+                int depth = depths[roomIndex] == int.MaxValue ? 0 : depths[roomIndex];
+                int budget = kind == MapRegionKind.Spawn
+                    ? 0
+                    : kind == MapRegionKind.Pocket
+                        ? Math.Max(0, Settings.EncounterPocketDifficultyBudget + depth * Settings.EncounterBudgetPerDepth)
+                        : Math.Max(0, Settings.EncounterDifficultyBudget + depth * Settings.EncounterBudgetPerDepth);
+                _regions.Add(new MapRegionDefinition(roomIndex, kind, bounds, depth, budget));
+
+                for (int x = bounds.Left; x < bounds.Right; x++)
+                {
+                    for (int y = bounds.Top; y < bounds.Bottom; y++)
+                    {
+                        if (grid[x, y] == 0) RegionIdMap[x, y] = roomIndex;
+                    }
+                }
+            }
+
+            ScaleRegionBudgetsToPoolCapacity();
+
+            // Chokes pertenecen a la arena que conectan para activar al cruzar su umbral.
+            Point[] directions = { new Point(0, -1), new Point(1, 0), new Point(0, 1), new Point(-1, 0) };
+            for (int x = 1; x < _width - 1; x++)
+            {
+                for (int y = 1; y < _height - 1; y++)
+                {
+                    if (ZoneMap[x, y] != MapZoneType.ChokePoint) continue;
+                    for (int i = 0; i < directions.Length; i++)
+                    {
+                        Point neighbor = new Point(x, y) + directions[i];
+                        int regionId = RegionIdMap[neighbor.X, neighbor.Y];
+                        if (regionId > 0)
+                        {
+                            RegionIdMap[x, y] = regionId;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        /// <summary>Reduce budgets proporcionalmente, reservando primero un pack mínimo por región.</summary>
+        private void ScaleRegionBudgetsToPoolCapacity()
+        {
+            int minimumCost = GetMinimumEncounterCost();
+            int minimumGroupSize = Math.Max(1, Settings.EncounterMinGroupSize);
+            int minimumRegionBudget = minimumCost * minimumGroupSize;
+            List<int> eligibleIndices = new List<int>();
+            long requestedTotal = 0;
+            for (int i = 0; i < _regions.Count; i++)
+            {
+                if (_regions[i].Budget <= 0) continue;
+                eligibleIndices.Add(i);
+                requestedTotal += _regions[i].Budget;
+            }
+
+            long guaranteedMinimum = (long)eligibleIndices.Count * minimumRegionBudget;
+            int capacity = Math.Max(1, Settings.EnemyPoolCapacity);
+            if (guaranteedMinimum > capacity)
+            {
+                throw new InvalidOperationException(
+                    $"El pool de {capacity} enemigos no alcanza para un grupo mínimo en cada una de las " +
+                    $"{eligibleIndices.Count} regiones. Aumenta EnemyPoolCapacity o reduce arenas/pockets.");
+            }
+            if (requestedTotal <= capacity || eligibleIndices.Count == 0) return;
+
+            long requestedExtras = 0;
+            for (int i = 0; i < eligibleIndices.Count; i++)
+                requestedExtras += Math.Max(0, _regions[eligibleIndices[i]].Budget - minimumRegionBudget);
+
+            int distributable = capacity - (int)guaranteedMinimum;
+            int assignedExtras = 0;
+            int[] scaledBudgets = new int[eligibleIndices.Count];
+            for (int i = 0; i < eligibleIndices.Count; i++)
+            {
+                int regionIndex = eligibleIndices[i];
+                int originalBudget = _regions[regionIndex].Budget;
+                int extras = Math.Max(0, originalBudget - minimumRegionBudget);
+                int scaledExtras = requestedExtras == 0
+                    ? 0
+                    : (int)((long)extras * distributable / requestedExtras);
+                scaledBudgets[i] = minimumRegionBudget + scaledExtras;
+                assignedExtras += scaledExtras;
+            }
+
+            int remainder = distributable - assignedExtras;
+            for (int i = 0; i < eligibleIndices.Count && remainder > 0; i++)
+            {
+                int originalBudget = _regions[eligibleIndices[i]].Budget;
+                if (scaledBudgets[i] >= originalBudget) continue;
+                scaledBudgets[i]++;
+                remainder--;
+            }
+
+            for (int i = 0; i < eligibleIndices.Count; i++)
+            {
+                int regionIndex = eligibleIndices[i];
+                MapRegionDefinition region = _regions[regionIndex];
+                _regions[regionIndex] = new MapRegionDefinition(
+                    region.Id,
+                    region.Kind,
+                    region.Bounds,
+                    region.Depth,
+                    scaledBudgets[i]);
+            }
+        }
+
+        private int GetMinimumEncounterCost()
+        {
+            int minimum = Math.Max(1, Settings.EncounterSwarmerCost);
+            minimum = Math.Min(minimum, Math.Max(1, Settings.EncounterRusherCost));
+            minimum = Math.Min(minimum, Math.Max(1, Settings.EncounterRoamerCost));
+            minimum = Math.Min(minimum, Math.Max(1, Settings.EncounterTurretCost));
+            minimum = Math.Min(minimum, Math.Max(1, Settings.EncounterStaticShooterCost));
+            minimum = Math.Min(minimum, Math.Max(1, Settings.EncounterMobileGeneratorCost));
+            return Math.Min(minimum, Math.Max(1, Settings.EncounterSpawnerCost));
+        }
+
+        /// <summary>Calcula la distancia en conexiones desde el spawn, no desde el reloj de juego.</summary>
+        private int[] GetRoomDepths()
+        {
+            int[] depths = new int[Rooms.Count];
+            for (int i = 0; i < depths.Length; i++) depths[i] = int.MaxValue;
+            if (depths.Length == 0) return depths;
+
+            Queue<int> pending = new Queue<int>();
+            depths[0] = 0;
+            pending.Enqueue(0);
+            while (pending.Count > 0)
+            {
+                int current = pending.Dequeue();
+                for (int i = 0; i < RoomConnections.Count; i++)
+                {
+                    (int from, int to) = RoomConnections[i];
+                    int neighbor = from == current ? to : to == current ? from : -1;
+                    if (neighbor < 0 || depths[neighbor] != int.MaxValue) continue;
+                    depths[neighbor] = depths[current] + 1;
+                    pending.Enqueue(neighbor);
+                }
+            }
+
+            return depths;
+        }
+
+        /// <summary>Devuelve el ID de región de una celda o -1 si es pasillo/no transitable.</summary>
+        public int GetRegionId(Point cell)
+        {
+            if (cell.X < 0 || cell.X >= _width || cell.Y < 0 || cell.Y >= _height)
+                return -1;
+            return RegionIdMap[cell.X, cell.Y];
         }
 
         private bool GrowCrawlerMap(int[,] grid)
@@ -129,6 +332,7 @@ namespace TwinStickShooter.Core
             Rectangle spawnRoom = new Rectangle(spawnX, spawnY, spawnRoomSize, spawnRoomSize);
             CarveRoom(grid, spawnRoom, null);
             Rooms.Add(spawnRoom);
+            _roomKinds.Add(MapRegionKind.Spawn);
             SpawnPoint = spawnRoom.Center;
 
             Point[] directions =
@@ -202,13 +406,126 @@ namespace TwinStickShooter.Core
                     {
                         int roomIndex = Rooms.Count;
                         Rooms.Add(arena);
+                        _roomKinds.Add(MapRegionKind.Arena);
                         RoomConnections.Add((attachedRoomIndices[currentCrawler], roomIndex));
                         attachedRoomIndices[currentCrawler] = roomIndex;
                         PrefabRoomsPlaced++;
                     }
                 }
+
             }
 
+            if (maxArenaRooms > 0) GeneratePockets(grid);
+            return true;
+        }
+
+        /// <summary>Abre pockets después del crawler para no consumir pasos ni emplazamientos de arenas.</summary>
+        private void GeneratePockets(int[,] grid)
+        {
+            int maxPocketRooms = Math.Max(0, Settings.MaxPocketCount);
+            float pocketChance = Math.Clamp(Settings.PocketChance, 0f, 1f);
+            List<(Point Cell, Point Direction)> anchors = new List<(Point Cell, Point Direction)>();
+            Point[] directions = { new Point(0, -1), new Point(1, 0), new Point(0, 1), new Point(-1, 0) };
+
+            for (int x = 2; x < _width - 2; x++)
+            {
+                for (int y = 2; y < _height - 2; y++)
+                {
+                    if (grid[x, y] != 0 || ZoneMap[x, y] != MapZoneType.Corridor) continue;
+                    if (_random.NextDouble() > pocketChance) continue;
+                    anchors.Add((new Point(x, y), directions[_random.Next(directions.Length)]));
+                }
+            }
+
+            for (int i = 0; i < anchors.Count && PocketRoomsPlaced < maxPocketRooms; i++)
+            {
+                PocketPlacementAttempts++;
+                (Point cell, Point direction) = anchors[i];
+                if (!TryExpandPocket(grid, cell, direction, out Rectangle pocket)) continue;
+
+                int parentRegion = FindNearestRoomIndex(cell);
+                int regionIndex = Rooms.Count;
+                Rooms.Add(pocket);
+                _roomKinds.Add(MapRegionKind.Pocket);
+                RoomConnections.Add((parentRegion, regionIndex));
+                PocketRoomsPlaced++;
+            }
+        }
+
+        /// <summary>Asocia cada pocket al nodo previo más cercano del grafo.</summary>
+        private int FindNearestRoomIndex(Point cell)
+        {
+            int nearestIndex = 0;
+            long nearestDistance = long.MaxValue;
+            for (int i = 0; i < Rooms.Count; i++)
+            {
+                Rectangle room = Rooms[i];
+                int closestX = Math.Clamp(cell.X, room.Left, room.Right - 1);
+                int closestY = Math.Clamp(cell.Y, room.Top, room.Bottom - 1);
+                long dx = (long)cell.X - closestX;
+                long dy = (long)cell.Y - closestY;
+                long distance = dx * dx + dy * dy;
+                if (distance < nearestDistance)
+                {
+                    nearestDistance = distance;
+                    nearestIndex = i;
+                }
+            }
+
+            return nearestIndex;
+        }
+
+        /// <summary>Busca espacio lateral libre, talla una cavidad orgánica y la conecta con un umbral corto.</summary>
+        private bool TryExpandPocket(int[,] grid, Point corridorCell, Point direction, out Rectangle pocket)
+        {
+            pocket = Rectangle.Empty;
+            int minimumRadius = Math.Clamp(Settings.PocketRadiusMin, 2, 4);
+            int maximumRadius = Math.Clamp(Settings.PocketRadiusMax, minimumRadius, 5);
+            int radius = _random.Next(minimumRadius, maximumRadius + 1);
+            Point side = new Point(-direction.Y, direction.X);
+            if (_random.Next(2) == 0) side *= -1;
+
+            Point center = corridorCell + side * (radius + 2);
+            Rectangle candidate = new Rectangle(center.X - radius, center.Y - radius, radius * 2 + 1, radius * 2 + 1);
+            Rectangle padded = new Rectangle(candidate.X - 1, candidate.Y - 1, candidate.Width + 2, candidate.Height + 2);
+            if (padded.Left <= 0 || padded.Top <= 0 || padded.Right >= _width - 1 || padded.Bottom >= _height - 1)
+                return false;
+
+            foreach (Rectangle room in Rooms)
+            {
+                if (padded.Intersects(room)) return false;
+            }
+
+            Point doorway = center - side * radius;
+            Point path = corridorCell;
+            while (path != doorway)
+            {
+                path += side;
+                if (path.X <= 0 || path.X >= _width - 1 || path.Y <= 0 || path.Y >= _height - 1)
+                    return false;
+                for (int i = 0; i < Rooms.Count; i++)
+                {
+                    if (Rooms[i].Contains(path)) return false;
+                }
+            }
+
+            for (int x = candidate.Left; x < candidate.Right; x++)
+            {
+                for (int y = candidate.Top; y < candidate.Bottom; y++)
+                {
+                    float normalizedX = (x - center.X) / (float)radius;
+                    float normalizedY = (y - center.Y) / (float)radius;
+                    float edge = 0.82f + (float)_random.NextDouble() * 0.18f;
+                    if (normalizedX * normalizedX + normalizedY * normalizedY > edge) continue;
+                    grid[x, y] = 0;
+                    ZoneMap[x, y] = MapZoneType.Pocket;
+                }
+            }
+
+            ConnectRooms(grid, corridorCell, doorway);
+            grid[doorway.X, doorway.Y] = 0;
+            ZoneMap[doorway.X, doorway.Y] = MapZoneType.Pocket;
+            pocket = candidate;
             return true;
         }
 
@@ -265,7 +582,7 @@ namespace TwinStickShooter.Core
                         continue;
                     }
 
-                    if (ZoneMap[x, y] != MapZoneType.Arena)
+                    if (ZoneMap[x, y] != MapZoneType.Arena && ZoneMap[x, y] != MapZoneType.Pocket)
                         ZoneMap[x, y] = MapZoneType.Corridor;
                 }
             }
@@ -278,7 +595,8 @@ namespace TwinStickShooter.Core
                     for (int i = 0; i < directions.Length; i++)
                     {
                         Point neighbor = new Point(x, y) + directions[i];
-                        if (ZoneMap[neighbor.X, neighbor.Y] == MapZoneType.Arena)
+                        if (ZoneMap[neighbor.X, neighbor.Y] == MapZoneType.Arena ||
+                            ZoneMap[neighbor.X, neighbor.Y] == MapZoneType.Pocket)
                         {
                             chokeCells.Add(new Point(x, y));
                             break;
@@ -301,6 +619,7 @@ namespace TwinStickShooter.Core
 
             for (int roomIndex = 1; roomIndex < Rooms.Count; roomIndex++)
             {
+                if (_roomKinds[roomIndex] != MapRegionKind.Arena) continue;
                 Rectangle arena = Rooms[roomIndex];
                 List<Point> candidates = new List<Point>();
                 for (int x = arena.Left + wallClearance; x < arena.Right - wallClearance; x++)

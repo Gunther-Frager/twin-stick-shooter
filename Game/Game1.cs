@@ -40,6 +40,8 @@ namespace TwinStickShooter
         // Timers por jugador. Arrays fijos (MaxPlayers): cero allocations en Update().
         private readonly float[] _shootCooldown = new float[GameConstants.MaxPlayers];
         private readonly float[] _thrusterTimer = new float[GameConstants.MaxPlayers];
+        /// <summary>Regiones vacías registradas una sola vez para el progreso del nivel.</summary>
+        private readonly HashSet<int> _clearedRegions = new HashSet<int>();
 
         // HUD de debug: acumuladores para no recalcular FPS cada frame (evita
         // formatear strings 60 veces por segundo).
@@ -102,7 +104,7 @@ namespace TwinStickShooter
             _particleRenderer = new ParticleRenderer(GraphicsDevice);
             _arenaRenderer = new ArenaRenderer(GraphicsDevice, _levelManager);
             _arenaRenderer.RebuildGeometry(); // Reconstruir geometría con el mapa cargado
-            _enemyRenderer = new EnemyRenderer(GraphicsDevice);
+            _enemyRenderer = new EnemyRenderer(GraphicsDevice, _enemyManager.Capacity);
             _spawnerRenderer = new SpawnerRenderer(GraphicsDevice);
             _debugConsole.LoadContent(GraphicsDevice);
         }
@@ -204,20 +206,25 @@ namespace TwinStickShooter
                 }
 
                 player.Update(in input, deltaTime, _levelManager);
+                int regionId = _combatTestSceneActive ? -1 : _levelManager.GetRegionIdAt(player.Position);
+                if (regionId > 0) ActivateEncounterRegion(regionId);
 
                 if (!input.IsConnected)
                 {
                     continue;
                 }
 
-                UpdateShooting(player, in input, i, deltaTime);
+                if (UpdateShooting(player, in input, i, deltaTime) && regionId > 0)
+                    ActivateEncounterRegion(regionId);
                 UpdateThruster(player, in input, i, deltaTime);
             }
 
             _bulletManager.Update(deltaTime, _enemyManager, _spawnerManager);
             _spawnerManager.Update(deltaTime);
-            _enemyManager.Update(deltaTime, _players, _enemyBulletManager);
+            _enemyManager.Update(deltaTime, _players, _enemyBulletManager, _camera.VisibleWorldBounds);
+            _enemyManager.ResolvePlayerContacts(_players);
             _enemyBulletManager.Update(deltaTime, _players);
+            UpdateClearedRegions();
             _particleSystem.Update(deltaTime);
 
             UpdateDebugTitle(gameTime);
@@ -229,13 +236,13 @@ namespace TwinStickShooter
         /// Cooldown de disparo por jugador. Al disparar: spawnea una bala
         /// pooled y un pequeño flash de partículas en la boca del cañón.
         /// </summary>
-        private void UpdateShooting(Player player, in PlayerInputState input, int playerIndex, float deltaTime)
+        private bool UpdateShooting(Player player, in PlayerInputState input, int playerIndex, float deltaTime)
         {
             _shootCooldown[playerIndex] -= deltaTime;
 
             if (!input.IsShooting || _shootCooldown[playerIndex] > 0f)
             {
-                return;
+                return false;
             }
 
             _shootCooldown[playerIndex] = GameConstants.ShootCooldownSeconds;
@@ -254,6 +261,32 @@ namespace TwinStickShooter
                 GameConstants.MuzzleParticleLifeSeconds,
                 GameConstants.MuzzleParticleSize,
                 player.Color);
+            return true;
+        }
+
+        private void ActivateEncounterRegion(int regionId)
+        {
+            _enemyManager.ActivateRegion(regionId);
+            _spawnerManager.ActivateRegion(regionId);
+        }
+
+        /// <summary>Marca como limpias las arenas/pockets sin entidades vivas de su región.</summary>
+        private void UpdateClearedRegions()
+        {
+            if (_combatTestSceneActive) return;
+
+            IReadOnlyList<MapRegionDefinition> regions = _levelManager.MapGenerator.Regions;
+            for (int i = 0; i < regions.Count; i++)
+            {
+                MapRegionDefinition region = regions[i];
+                if (region.Id <= 0 || _clearedRegions.Contains(region.Id)) continue;
+                if (_enemyManager.GetAliveCountInRegion(region.Id) > 0 ||
+                    _spawnerManager.GetAliveCountInRegion(region.Id) > 0)
+                    continue;
+
+                if (_clearedRegions.Add(region.Id))
+                    SetDebugMessage($"{region.Kind} {region.Id} limpio");
+            }
         }
 
         /// <summary>
@@ -453,7 +486,7 @@ namespace TwinStickShooter
             _enemyBulletManager = new EnemyBulletManager(_levelManager);
             _particleSystem = new ParticleSystem(GameConstants.MaxParticles, _levelManager);
             _enemyManager = new EnemyManager(_levelManager);
-            _spawnerManager = new SpawnerManager(GameConstants.MaxSpawners, _enemyManager);
+            _spawnerManager = new SpawnerManager(_levelManager.MapGenerator.Settings.EnemyPoolCapacity, _enemyManager);
             _camera = new Camera();
             _debugConsole = new DebugConsole();
 
@@ -483,6 +516,7 @@ namespace TwinStickShooter
         {
             _combatTestSceneActive = true;
             _levelCompleted = false;
+            _clearedRegions.Clear();
             _exitWaitingMessageShown = false;
             _levelManager.ConfigureCombatTestArena();
             _spawnerManager.Reset();
@@ -524,6 +558,7 @@ namespace TwinStickShooter
 
             _combatTestSceneActive = false;
             _levelCompleted = false;
+            _clearedRegions.Clear();
             _exitWaitingMessageShown = false;
             _spawnerManager.Reset();
             _enemyManager.Clear();
@@ -542,7 +577,8 @@ namespace TwinStickShooter
             _lastBudgetedGroupCount = 0;
             IReadOnlyList<EncounterSpawn> plan = EncounterDirector.Plan(
                 _levelManager.GetCollisionGridSnapshot(),
-                generator.Rooms,
+                generator.RegionIdMap,
+                generator.Regions,
                 generator.SpawnPoint,
                 GameConstants.GridCellSize,
                 generator.Settings);
@@ -555,11 +591,11 @@ namespace TwinStickShooter
                 if (spawn.Type == EnemyType.Spawner)
                 {
                     placed = _levelManager.IsPlayableAndWalkable(worldPosition, GameConstants.SpawnerRadius) &&
-                        _spawnerManager.Register(worldPosition);
+                        _spawnerManager.Register(worldPosition, spawn.RegionIndex);
                 }
                 else
                 {
-                    placed = _enemyManager.Spawn(worldPosition, Vector2.Zero, spawn.Type);
+                    placed = _enemyManager.Spawn(worldPosition, Vector2.Zero, spawn.Type, spawn.RegionIndex);
                 }
 
                 if (!placed) continue;

@@ -44,8 +44,57 @@ namespace TwinStickShooter.Core
             if (settings == null) throw new ArgumentNullException(nameof(settings));
             if (cellSize <= 0) throw new ArgumentOutOfRangeException(nameof(cellSize));
 
+            int[,] regionIdMap = new int[grid.GetLength(0), grid.GetLength(1)];
+            for (int x = 0; x < regionIdMap.GetLength(0); x++)
+            {
+                for (int y = 0; y < regionIdMap.GetLength(1); y++) regionIdMap[x, y] = -1;
+            }
+
+            List<MapRegionDefinition> regions = new List<MapRegionDefinition>();
+            for (int regionId = 0; regionId < rooms.Count; regionId++)
+            {
+                Rectangle bounds = rooms[regionId];
+                MapRegionKind kind = regionId == 0 ? MapRegionKind.Spawn : MapRegionKind.Arena;
+                regions.Add(new MapRegionDefinition(
+                    regionId,
+                    kind,
+                    bounds,
+                    0,
+                    kind == MapRegionKind.Spawn ? 0 : Math.Max(0, settings.EncounterDifficultyBudget)));
+
+                if (kind == MapRegionKind.Spawn) continue;
+                for (int x = bounds.Left; x < bounds.Right; x++)
+                {
+                    for (int y = bounds.Top; y < bounds.Bottom; y++)
+                    {
+                        if (x >= 0 && x < grid.GetLength(0) && y >= 0 && y < grid.GetLength(1) && grid[x, y] == 0)
+                            regionIdMap[x, y] = regionId;
+                    }
+                }
+            }
+
+            return Plan(grid, regionIdMap, regions, spawnPoint, cellSize, settings);
+        }
+
+        /// <summary>Planifica budgets fijos solo en celdas de arenas y pockets con ownership regional.</summary>
+        public static IReadOnlyList<EncounterSpawn> Plan(
+            int[,] grid,
+            int[,] regionIdMap,
+            IReadOnlyList<MapRegionDefinition> regions,
+            Point spawnPoint,
+            int cellSize,
+            MapGenerationSettings settings)
+        {
+            if (grid == null) throw new ArgumentNullException(nameof(grid));
+            if (regionIdMap == null) throw new ArgumentNullException(nameof(regionIdMap));
+            if (regions == null) throw new ArgumentNullException(nameof(regions));
+            if (settings == null) throw new ArgumentNullException(nameof(settings));
+            if (cellSize <= 0) throw new ArgumentOutOfRangeException(nameof(cellSize));
+            if (grid.GetLength(0) != regionIdMap.GetLength(0) || grid.GetLength(1) != regionIdMap.GetLength(1))
+                throw new ArgumentException("El ownership regional debe tener las mismas dimensiones que el mapa.", nameof(regionIdMap));
+
             List<EncounterSpawn> plan = new List<EncounterSpawn>();
-            int remainingSlots = GameConstants.MaxEnemies;
+            int remainingSlots = Math.Max(0, settings.EnemyPoolCapacity);
             int maxGroupSize = Math.Max(1, settings.EncounterMaxGroupSize);
             int minGroupSize = Math.Min(Math.Max(1, settings.EncounterMinGroupSize), maxGroupSize);
             float clusterRadius = Math.Max(0f, settings.EncounterClusterRadius);
@@ -56,20 +105,22 @@ namespace TwinStickShooter.Core
             int nextClusterId = 0;
             List<EncounterRegion> eligibleRegions = new List<EncounterRegion>();
 
-            for (int roomIndex = 1; roomIndex < rooms.Count; roomIndex++)
+            for (int regionIndex = 0; regionIndex < regions.Count; regionIndex++)
             {
-                Rectangle room = rooms[roomIndex];
+                MapRegionDefinition region = regions[regionIndex];
+                if (region.Kind == MapRegionKind.Spawn || region.Budget <= 0) continue;
 
-                EncounterRegion roomRegion = new EncounterRegion
+                EncounterRegion encounterRegion = new EncounterRegion
                 {
-                    RegionIndex = roomIndex,
-                    Budget = Math.Max(0, settings.EncounterDifficultyBudget)
+                    RegionIndex = region.Id,
+                    Budget = region.Budget,
                 };
-                for (int x = room.Left + 1; x < room.Right - 1; x++)
+                for (int x = region.Bounds.Left; x < region.Bounds.Right; x++)
                 {
-                    for (int y = room.Top + 1; y < room.Bottom - 1; y++)
+                    for (int y = region.Bounds.Top; y < region.Bounds.Bottom; y++)
                     {
-                        if (x < 0 || x >= grid.GetLength(0) || y < 0 || y >= grid.GetLength(1) || grid[x, y] != 0)
+                        if (x < 0 || x >= grid.GetLength(0) || y < 0 || y >= grid.GetLength(1) ||
+                            grid[x, y] != 0 || regionIdMap[x, y] != region.Id)
                         {
                             continue;
                         }
@@ -81,35 +132,12 @@ namespace TwinStickShooter.Core
                             continue;
                         }
 
-                        roomRegion.Available.Add(new Point(x, y));
+                        encounterRegion.Available.Add(new Point(x, y));
                     }
                 }
 
-                if (roomRegion.Available.Count > 0)
-                {
-                    eligibleRegions.Add(roomRegion);
-                }
+                if (encounterRegion.Available.Count > 0) eligibleRegions.Add(encounterRegion);
             }
-
-            EncounterRegion corridorRegion = new EncounterRegion
-            {
-                RegionIndex = rooms.Count,
-                Budget = Math.Max(0, settings.EncounterDifficultyBudget)
-            };
-            for (int x = 0; x < grid.GetLength(0); x++)
-            {
-                for (int y = 0; y < grid.GetLength(1); y++)
-                {
-                    if (grid[x, y] != 0 || IsCellInsideAnyRoom(x, y, rooms)) continue;
-                    long dx = (long)x - spawnPoint.X;
-                    long dy = (long)y - spawnPoint.Y;
-                    if (dx * dx + dy * dy >= safeDistanceSquared)
-                    {
-                        corridorRegion.Available.Add(new Point(x, y));
-                    }
-                }
-            }
-            if (corridorRegion.Available.Count > 0) eligibleRegions.Add(corridorRegion);
 
             while (remainingSlots > 0 && eligibleRegions.Count > 0)
             {
@@ -189,47 +217,7 @@ namespace TwinStickShooter.Core
                 }
             }
 
-            TrimToSpawnLimit(
-                plan,
-                Math.Min(GameConstants.MaxEnemies, Math.Max(0, settings.EncounterMaxInitialSpawnCount)),
-                minGroupSize);
             return plan.AsReadOnly();
-        }
-
-        private static void TrimToSpawnLimit(List<EncounterSpawn> plan, int limit, int minimumGroupSize)
-        {
-            while (plan.Count > limit)
-            {
-                int removableIndex = -1;
-                for (int i = plan.Count - 1; i >= 0; i--)
-                {
-                    int groupSize = 0;
-                    for (int j = 0; j < plan.Count; j++)
-                    {
-                        if (plan[j].ClusterId == plan[i].ClusterId) groupSize++;
-                    }
-
-                    if (groupSize > minimumGroupSize)
-                    {
-                        removableIndex = i;
-                        break;
-                    }
-                }
-
-                if (removableIndex < 0) break;
-                plan.RemoveAt(removableIndex);
-            }
-        }
-
-        private static bool IsCellInsideAnyRoom(int x, int y, IList<Rectangle> rooms)
-        {
-            Point cell = new Point(x, y);
-            for (int i = 0; i < rooms.Count; i++)
-            {
-                if (rooms[i].Contains(cell)) return true;
-            }
-
-            return false;
         }
 
         private static List<EnemyType> GetAffordableTypes(MapGenerationSettings settings, int budget)

@@ -16,7 +16,7 @@ namespace TwinStickShooter.Rendering
         private readonly BasicEffect _effect;
         private readonly VertexPositionColor[] _vertices;
 
-        public EnemyRenderer(GraphicsDevice graphicsDevice)
+        public EnemyRenderer(GraphicsDevice graphicsDevice, int enemyCapacity = GameConstants.MaxEnemies)
         {
             _effect = new BasicEffect(graphicsDevice)
             {
@@ -29,7 +29,7 @@ namespace TwinStickShooter.Rendering
                     0f, 1f)
             };
 
-            _vertices = new VertexPositionColor[GameConstants.MaxEnemies * 6];
+            _vertices = new VertexPositionColor[Math.Max(1, enemyCapacity) * 6];
         }
 
         public void Draw(GraphicsDevice graphicsDevice, Enemy[] enemies, Matrix viewMatrix)

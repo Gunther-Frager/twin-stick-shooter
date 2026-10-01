@@ -24,6 +24,8 @@ namespace TwinStickShooter.Entities
         public float Health;
         public float MaxHealth;
         public float InvulnerabilityTimer;
+        public float ContactSlowTimer { get; private set; }
+        public float MovementSpeedMultiplier => ContactSlowTimer > 0f ? GameConstants.ContactSlowMultiplier : 1f;
 
         public Player(int index, Vector2 spawnPosition)
         {
@@ -51,16 +53,23 @@ namespace TwinStickShooter.Entities
             Console.WriteLine($"[Player] Jugador {Index} recibió daño. Health: {Health:0.##}");
         }
 
+        /// <summary>Refresca la duración del slow sin acumular su intensidad.</summary>
+        public void ApplyContactSlow()
+        {
+            ContactSlowTimer = Math.Max(ContactSlowTimer, GameConstants.ContactSlowDurationSeconds);
+        }
+
         public void Update(in PlayerInputState input, float deltaTime, LevelManager levelManager = null)
         {
             InvulnerabilityTimer = Math.Max(0f, InvulnerabilityTimer - deltaTime);
+            ContactSlowTimer = Math.Max(0f, ContactSlowTimer - deltaTime);
 
             if (!input.IsConnected)
             {
                 return;
             }
 
-            Vector2 moveDelta = input.MoveDirection * GameConstants.PlayerSpeed * deltaTime;
+            Vector2 moveDelta = input.MoveDirection * GameConstants.PlayerSpeed * MovementSpeedMultiplier * deltaTime;
             
             if (levelManager != null)
             {

@@ -24,7 +24,17 @@ namespace TwinStickShooter.Core
         public float ArenaSolidCoreClusterChance { get; set; } = 0.35f;
         public int ArenaObstacleHitPoints { get; set; } = 5;
         public int EncounterDifficultyBudget { get; set; } = 18;
-        public int EncounterMaxInitialSpawnCount { get; set; } = 27;
+        /// <summary>Capacidad fija preasignada para enemigos y generadores de todas las regiones.</summary>
+        public int EnemyPoolCapacity { get; set; } = GameConstants.MaxEnemies;
+        // El budget de arena crece por nivel de profundidad en el grafo.
+        public int EncounterBudgetPerDepth { get; set; } = 2;
+        // Los pockets son encuentros más pequeños, independientes de su arena vecina.
+        public int EncounterPocketDifficultyBudget { get; set; } = 6;
+        // Probabilidad por celda de pasillo elegible, limitada por MaxPocketCount.
+        public float PocketChance { get; set; } = 0.2f;
+        public int MaxPocketCount { get; set; } = 8;
+        public int PocketRadiusMin { get; set; } = 2;
+        public int PocketRadiusMax { get; set; } = 3;
         public int EncounterSwarmerCost { get; set; } = 1;
         public int EncounterRusherCost { get; set; } = 1;
         public int EncounterRoamerCost { get; set; } = 1;

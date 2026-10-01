@@ -45,6 +45,66 @@ namespace TwinStickShooter.Tests
         }
 
         [Fact]
+        public void Plan_UsesIndependentStaticBudgetsForArenaAndPocket()
+        {
+            int[,] grid = CreateWallGrid(24, 16);
+            int[,] regionIds = CreateWallGrid(24, 16);
+            for (int x = 0; x < regionIds.GetLength(0); x++)
+            {
+                for (int y = 0; y < regionIds.GetLength(1); y++) regionIds[x, y] = -1;
+            }
+
+            Rectangle spawnBounds = new Rectangle(1, 1, 4, 4);
+            Rectangle arenaBounds = new Rectangle(6, 2, 8, 10);
+            Rectangle pocketBounds = new Rectangle(16, 4, 6, 6);
+            CarveRegion(grid, regionIds, spawnBounds, 0);
+            CarveRegion(grid, regionIds, arenaBounds, 1);
+            CarveRegion(grid, regionIds, pocketBounds, 2);
+            for (int x = 5; x <= 5; x++)
+            {
+                for (int y = 5; y <= 5; y++) grid[x, y] = 0;
+            }
+            for (int x = 14; x <= 15; x++)
+            {
+                for (int y = 6; y <= 6; y++) grid[x, y] = 0;
+            }
+
+            var regions = new[]
+            {
+                new MapRegionDefinition(0, MapRegionKind.Spawn, spawnBounds, 0, 0),
+                new MapRegionDefinition(1, MapRegionKind.Arena, arenaBounds, 1, 8),
+                new MapRegionDefinition(2, MapRegionKind.Pocket, pocketBounds, 2, 4),
+            };
+            var settings = new MapGenerationSettings
+            {
+                EncounterMinGroupSize = 1,
+                EncounterMaxGroupSize = 1,
+                EncounterClusterRadius = 20f,
+                EncounterSpawnSafeDistance = 0f,
+                EncounterSwarmerCost = 100,
+                EncounterRusherCost = 1,
+                EncounterRoamerCost = 100,
+                EncounterTurretCost = 100,
+                EncounterStaticShooterCost = 100,
+                EncounterMobileGeneratorCost = 100,
+                EncounterSpawnerCost = 100,
+            };
+
+            IReadOnlyList<EncounterSpawn> plan = EncounterDirector.Plan(
+                grid, regionIds, regions, new Point(2, 2), 10, settings);
+
+            Assert.NotEmpty(plan);
+            Assert.DoesNotContain(plan, spawn => spawn.RegionIndex == 0);
+            Assert.DoesNotContain(plan, spawn => regionIds[spawn.Position.X / 10, spawn.Position.Y / 10] < 0);
+            Assert.Equal(2, plan.Select(spawn => spawn.RegionIndex).Distinct().Count());
+            Assert.All(plan.GroupBy(spawn => spawn.RegionIndex), regionPlan =>
+            {
+                int expectedBudget = regionPlan.Key == 1 ? 8 : 4;
+                Assert.Equal(expectedBudget, regionPlan.Sum(spawn => GetCost(spawn.Type, settings)));
+            });
+        }
+
+        [Fact]
         public void Plan_RespectsDifficultyBudgetAndProducesUniquePositions()
         {
             var settings = new MapGenerationSettings
@@ -228,7 +288,7 @@ namespace TwinStickShooter.Tests
         }
 
         [Fact]
-        public void Plan_SpawnsBudgetedGroupsInCrawlerCorridorsWithoutPrefabRooms()
+        public void Plan_DoesNotSpawnInUnownedCrawlerCorridors()
         {
             int[,] grid = CreateWallGrid(40, 40);
             Rectangle spawnRoom = new Rectangle(2, 2, 4, 4);
@@ -259,9 +319,7 @@ namespace TwinStickShooter.Tests
             IReadOnlyList<EncounterSpawn> plan = EncounterDirector.Plan(
                 grid, new[] { spawnRoom }, new Point(3, 3), 10, settings);
 
-            Assert.NotEmpty(plan);
-            Assert.All(plan, spawn => Assert.Equal(1, spawn.RegionIndex));
-            Assert.All(plan.GroupBy(spawn => spawn.ClusterId), group => Assert.InRange(group.Count(), 3, 4));
+            Assert.Empty(plan);
         }
 
         private static Rectangle[] CreateRooms()
@@ -290,6 +348,18 @@ namespace TwinStickShooter.Tests
             }
 
             return grid;
+        }
+
+        private static void CarveRegion(int[,] grid, int[,] regionIds, Rectangle bounds, int regionId)
+        {
+            for (int x = bounds.Left; x < bounds.Right; x++)
+            {
+                for (int y = bounds.Top; y < bounds.Bottom; y++)
+                {
+                    grid[x, y] = 0;
+                    regionIds[x, y] = regionId;
+                }
+            }
         }
 
         private static int GetCost(EnemyType type, MapGenerationSettings settings)

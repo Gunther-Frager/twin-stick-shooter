@@ -16,6 +16,23 @@ namespace TwinStickShooter.Core
 
         public Matrix ViewMatrix { get; private set; }
 
+        /// <summary>Rectángulo mundial visible en pantalla para reglas de adquisición y disparo.</summary>
+        public Rectangle VisibleWorldBounds
+        {
+            get
+            {
+                Matrix inverseView = Matrix.Invert(ViewMatrix);
+                Vector2 topLeft = Vector2.Transform(Vector2.Zero, inverseView);
+                Vector2 bottomRight = Vector2.Transform(
+                    new Vector2(GameConstants.ScreenWidth, GameConstants.ScreenHeight), inverseView);
+                int left = (int)MathF.Floor(MathF.Min(topLeft.X, bottomRight.X));
+                int top = (int)MathF.Floor(MathF.Min(topLeft.Y, bottomRight.Y));
+                int right = (int)MathF.Ceiling(MathF.Max(topLeft.X, bottomRight.X));
+                int bottom = (int)MathF.Ceiling(MathF.Max(topLeft.Y, bottomRight.Y));
+                return new Rectangle(left, top, right - left, bottom - top);
+            }
+        }
+
         public void Reset(Vector2 position)
         {
             _position = position;
