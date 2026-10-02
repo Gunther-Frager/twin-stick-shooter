@@ -93,8 +93,11 @@ namespace TwinStickShooter.Core
 
             ArenaObstacle hitObstacle = _arenaObstacles[bestIndex];
             bool destroyed = hitObstacle.ApplyDamage(damage);
-            if (destroyed) _arenaObstacles.RemoveAt(bestIndex);
-            PrimitiveMapRevision++;
+            if (destroyed)
+            {
+                _arenaObstacles.RemoveAt(bestIndex);
+                PrimitiveMapRevision++;
+            }
 
             return true;
         }
@@ -314,7 +317,31 @@ namespace TwinStickShooter.Core
         /// <summary>Comprueba visión directa contra la misma geometría que bloquea el movimiento.</summary>
         public bool HasLineOfSight(Vector2 start, Vector2 end)
         {
-            return !TrySweepCircle(start, end, 0.5f, out _, out _);
+            if (CheckCollision(start, 1f))
+            {
+                return false;
+            }
+
+            Vector2 displacement = end - start;
+            float distance = displacement.Length();
+            if (distance <= 0.0001f)
+            {
+                return true;
+            }
+
+            const float stepDistance = 16f;
+            int steps = Math.Max(1, (int)MathF.Ceiling(distance / stepDistance));
+            for (int step = 1; step <= steps; step++)
+            {
+                float t = step / (float)steps;
+                Vector2 current = Vector2.Lerp(start, end, t);
+                if (CheckCollision(current, 2f))
+                {
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         public bool TrySweepCircle(Vector2 start, Vector2 end, float radius, out Vector2 hitPosition, out Vector2 hitNormal)

@@ -88,25 +88,35 @@ namespace TwinStickShooter
         protected override void Initialize()
         {
             InitializeManagers();
-            InitializeLevel();
-
-            // Contar paredes para depuración
-            int wallCount = CountWalls();
-            SetDebugMessage($"Mapa cargado: {wallCount} colisiones");
-
             base.Initialize();
         }
 
         protected override void LoadContent()
         {
+            // Cargar plantillas de sala para uso del generador de mapas
+            _roomTemplates = RoomTemplateLoader.LoadAll(Content);
+            Console.WriteLine($"[Game1] Plantillas de sala cargadas: {_roomTemplates.Count}");
+            _levelManager.SetRoomTemplates(_roomTemplates);
+
+            // Cargar nivel procedural y configurar mapa
+            InitializeLevel();
+
+            // Renderizadores dependientes de GraphicsDevice
             _shipRenderer = new ShipRenderer(GraphicsDevice);
             _bulletRenderer = new BulletRenderer(GraphicsDevice);
             _particleRenderer = new ParticleRenderer(GraphicsDevice);
             _arenaRenderer = new ArenaRenderer(GraphicsDevice, _levelManager);
-            _arenaRenderer.RebuildGeometry(); // Reconstruir geometría con el mapa cargado
             _enemyRenderer = new EnemyRenderer(GraphicsDevice, _enemyManager.Capacity);
             _spawnerRenderer = new SpawnerRenderer(GraphicsDevice);
             _debugConsole.LoadContent(GraphicsDevice);
+
+            // Contar paredes para depuración
+            int wallCount = CountWalls();
+            SetDebugMessage($"Mapa cargado: {wallCount} colisiones");
+
+            // Forzar recolección de basura para limpiar basuras temporales de la carga
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
         }
 
         /// <summary>Actualiza input, jugadores, combate, efectos y HUD en cada tick.</summary>
@@ -489,13 +499,6 @@ namespace TwinStickShooter
             _spawnerManager = new SpawnerManager(_levelManager.MapGenerator.Settings.EnemyPoolCapacity, _enemyManager);
             _camera = new Camera();
             _debugConsole = new DebugConsole();
-
-            // Cargar plantillas de sala para uso futuro
-            _roomTemplates = RoomTemplateLoader.LoadAll(Content);
-            Console.WriteLine($"[Game1] Plantillas de sala cargadas: {_roomTemplates.Count}");
-            
-            // Inyectar plantillas en el generador de mapas
-            _levelManager.SetRoomTemplates(_roomTemplates);
         }
 
         /// <summary>

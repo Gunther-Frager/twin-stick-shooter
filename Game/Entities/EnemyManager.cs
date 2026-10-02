@@ -16,6 +16,7 @@ namespace TwinStickShooter.Entities
         private readonly LevelManager _levelManager;
         private readonly Random _random;
         private readonly HashSet<int> _activatedRegions = new HashSet<int>();
+        private readonly Dictionary<int, int> _aliveCountPerRegion = new Dictionary<int, int>();
 
         public EnemyManager(LevelManager levelManager)
         {
@@ -60,6 +61,7 @@ namespace TwinStickShooter.Entities
                 }
             }
             _activatedRegions.Clear();
+            _aliveCountPerRegion.Clear();
         }
 
         public bool Spawn(Vector2 position, Vector2 velocity, EnemyType type = EnemyType.Swarmer, int regionId = -1)
@@ -86,6 +88,12 @@ namespace TwinStickShooter.Entities
             enemy.Radius = radius;
             enemy.Color = GetColor(type);
             enemy.Health = enemy.MaxHealth = GetHealth(type);
+
+            if (regionId > 0)
+            {
+                _aliveCountPerRegion.TryGetValue(regionId, out int current);
+                _aliveCountPerRegion[regionId] = current + 1;
+            }
 
             if (type == EnemyType.Roamer || type == EnemyType.Rusher || type == EnemyType.MobileGenerator)
             {
@@ -142,17 +150,29 @@ namespace TwinStickShooter.Entities
             return count;
         }
 
-        /// <summary>Cuenta slots vivos, incluidos Dormant y descendientes, asignados a la región.</summary>
+        /// <summary>Cuenta slots vivos, incluidos Dormant y descendientes, asignados a la región en O(1).</summary>
         public int GetAliveCountInRegion(int regionId)
         {
-            int count = 0;
-            for (int i = 0; i < _pool.Items.Length; i++)
+            if (regionId <= 0) return 0;
+            return _aliveCountPerRegion.TryGetValue(regionId, out int count) ? count : 0;
+        }
+
+        private void DeactivateEnemy(Enemy enemy)
+        {
+            if (enemy.RegionId > 0 && _aliveCountPerRegion.TryGetValue(enemy.RegionId, out int current))
             {
-                Enemy enemy = _pool.Items[i];
-                if (enemy.Active && enemy.RegionId == regionId) count++;
+                if (current <= 1)
+                {
+                    _aliveCountPerRegion.Remove(enemy.RegionId);
+                }
+                else
+                {
+                    _aliveCountPerRegion[enemy.RegionId] = current - 1;
+                }
             }
 
-            return count;
+            enemy.Active = false;
+            _pool.Release(enemy.PoolIndex);
         }
 
         public bool ApplyDamage(int index, float amount)
@@ -171,8 +191,7 @@ namespace TwinStickShooter.Entities
             enemy.Health -= amount;
             if (enemy.Health <= 0f)
             {
-                enemy.Active = false;
-                _pool.Release(enemy.PoolIndex);
+                DeactivateEnemy(enemy);
             }
 
             return true;
@@ -486,8 +505,7 @@ namespace TwinStickShooter.Entities
 
             if (offWorld)
             {
-                enemy.Active = false;
-                _pool.Release(enemy.PoolIndex);
+                DeactivateEnemy(enemy);
                 Console.WriteLine($"[EnemyManager] Enemigo desactivado por salir del mundo.");
             }
         }
@@ -530,8 +548,7 @@ namespace TwinStickShooter.Entities
 
             if (offWorld)
             {
-                enemy.Active = false;
-                _pool.Release(enemy.PoolIndex);
+                DeactivateEnemy(enemy);
             }
         }
     }

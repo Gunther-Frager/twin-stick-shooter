@@ -23,6 +23,7 @@ namespace TwinStickShooter.Core
 
         private readonly SpawnerData[] _spawners;
         private readonly EnemyManager _enemyManager;
+        private readonly System.Collections.Generic.HashSet<int> _activatedRegions = new System.Collections.Generic.HashSet<int>();
 
         public SpawnerManager(int capacity, EnemyManager enemyManager)
         {
@@ -90,6 +91,9 @@ namespace TwinStickShooter.Core
         /// <summary>Despierta de una vez los spawners pertenecientes a una región.</summary>
         public void ActivateRegion(int regionId)
         {
+            if (regionId > 0 && !_activatedRegions.Add(regionId))
+                return;
+
             for (int i = 0; i < _spawners.Length; i++)
             {
                 if (_spawners[i].Active && _spawners[i].RegionId == regionId)
@@ -105,6 +109,7 @@ namespace TwinStickShooter.Core
                 _spawners[i].Health = 0f;
                 _spawners[i].Timer = 0f;
             }
+            _activatedRegions.Clear();
         }
 
         public void Update(float deltaTime)
