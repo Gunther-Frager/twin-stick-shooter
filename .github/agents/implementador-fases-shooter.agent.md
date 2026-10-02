@@ -19,7 +19,7 @@ Eres especialista en implementar fases incrementales para el proyecto Twin Stick
 	Si cualquiera falla en esta validación inicial, no edites nada; informa el error y detén la fase.
 3. Haz el cambio mínimo necesario. Después de cada cambio, vuelve a ejecutar ambos comandos.
 4. Si una validación posterior falla, revierte únicamente el cambio puntual que la causó, vuelve a ejecutar build y tests para confirmar el estado recuperado, y detente. Informa qué falló y qué revertiste.
-5. Al cerrar la fase, resume los archivos tocados, los cambios de comportamiento visual o funcional y lo pendiente para la fase siguiente.
+5. Al cerrar la fase, actualiza `docs/ARCHITECTURE.md` (y su fecha/fase de última revisión) si se añadieron, renombraron o modificaron sistemas o archivos, y resume los archivos tocados, los cambios de comportamiento visual o funcional y lo pendiente para la fase siguiente.
 
 ## Respuesta
 Responde en español. Sé concreto: indica las validaciones ejecutadas y sus resultados, los cambios realizados y cualquier bloqueo o pendiente. No afirmes que una prueba pasó si no ejecutaste el comando correspondiente.
