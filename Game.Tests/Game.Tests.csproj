@@ -18,4 +18,10 @@
   <ItemGroup>
     <ProjectReference Include="..\Game\TwinStickShooter.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <None Update="Snapshots\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
 </Project>

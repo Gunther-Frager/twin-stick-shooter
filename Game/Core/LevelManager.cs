@@ -47,6 +47,23 @@ namespace TwinStickShooter.Core
         public int PrimitiveMapRevision { get; private set; }
         public bool HasPrimitiveMapData() => _primitiveMapInitialized;
 
+#if DEBUG
+        /// <summary>Número de llamadas a CheckCollision desde el último ResetQueryCounters().</summary>
+        public long CollisionQueryCount { get; private set; }
+        /// <summary>Número de llamadas a TryGetPenetration desde el último ResetQueryCounters().</summary>
+        public long PenetrationQueryCount { get; private set; }
+        /// <summary>Número de llamadas a TrySweepCircle desde el último ResetQueryCounters().</summary>
+        public long SweepQueryCount { get; private set; }
+
+        /// <summary>Restablece los tres contadores de consulta a cero.</summary>
+        public void ResetQueryCounters()
+        {
+            CollisionQueryCount = 0;
+            PenetrationQueryCount = 0;
+            SweepQueryCount = 0;
+        }
+#endif
+
         /// <summary>
         /// Establece una celda como colisionable.
         /// </summary>
@@ -129,6 +146,9 @@ namespace TwinStickShooter.Core
                 throw new InvalidOperationException("Primitive map data is not initialized. Call RebuildPrimitiveMapFromGrid or SetPrimitiveMap before checking collisions.");
             }
 
+#if DEBUG
+            CollisionQueryCount++;
+#endif
             if (position.X <= radius || position.Y <= radius ||
                 position.X >= WorldWidth - radius || position.Y >= WorldHeight - radius)
             {
@@ -177,6 +197,9 @@ namespace TwinStickShooter.Core
                 throw new InvalidOperationException("Primitive map data is not initialized. Call RebuildPrimitiveMapFromGrid or SetPrimitiveMap before checking collisions.");
             }
 
+#if DEBUG
+            PenetrationQueryCount++;
+#endif
             pushOut = Vector2.Zero;
             float deepestOverlap = 0f;
             float leftOverlap = radius - center.X;
@@ -346,6 +369,9 @@ namespace TwinStickShooter.Core
 
         public bool TrySweepCircle(Vector2 start, Vector2 end, float radius, out Vector2 hitPosition, out Vector2 hitNormal)
         {
+#if DEBUG
+            SweepQueryCount++;
+#endif
             hitPosition = end;
             hitNormal = Vector2.Zero;
 

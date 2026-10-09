@@ -1,0 +1,85 @@
+﻿seed: 514
+SpawnPoint: 15,15
+ExitPoint: 2,2
+SpawnExitPathLength: 26
+Rooms.Count: 5
+  Room[0]: X=14 Y=14 W=2 H=2
+  Room[1]: X=10 Y=18 W=11 H=9
+  Room[2]: X=3 Y=2 W=9 H=11
+  Room[3]: X=13 Y=2 W=11 H=11
+  Room[4]: X=3 Y=14 W=5 H=5
+RoomConnections.Count: 4
+  Connection: 0->1
+  Connection: 0->2
+  Connection: 0->3
+  Connection: 2->4
+Regions.Count: 5
+  Region id=0 kind=Spawn bounds=(14,14,2,2) depth=0 budget=0
+  Region id=1 kind=Arena bounds=(10,18,11,9) depth=1 budget=20
+  Region id=2 kind=Arena bounds=(3,2,9,11) depth=1 budget=20
+  Region id=3 kind=Arena bounds=(13,2,11,11) depth=1 budget=20
+  Region id=4 kind=Pocket bounds=(3,14,5,5) depth=2 budget=10
+GridHash: b9c277b2aac31de6be90714e5da940dbcfe6b45914e16a23994cf0dde85b0774
+ZoneMapHash: 9fabea21880dc8a3f8369ced7657e2b83e401f49bdd15fa0197c8478fea96ba2
+RegionIdMapHash: 60963ce036f3568cd1ad0bbe3291ad582b229c39303dbd0ecce4ffddfc1c8b7f
+ArenaObstacles.Count: 19
+  Obstacle: start=(14.7500,21.5000) end=(16.2500,21.5000) radius=0.1250 destructible=True hp=5
+  Obstacle: start=(13.5000,20.2500) end=(13.5000,20.7500) radius=0.1250 destructible=False hp=0
+  Obstacle: start=(18.2500,22.5000) end=(18.7500,22.5000) radius=0.1250 destructible=True hp=5
+  Obstacle: start=(17.5000,24.2500) end=(17.5000,24.7500) radius=0.1250 destructible=True hp=5
+  Obstacle: start=(12.5000,23.7500) end=(12.5000,23.2500) radius=0.1250 destructible=True hp=5
+  Obstacle: start=(18.0000,20.5000) end=(17.0000,20.5000) radius=0.1250 destructible=True hp=5
+  Obstacle: start=(4.7500,9.5000) end=(6.2500,9.5000) radius=0.1250 destructible=True hp=5
+  Obstacle: start=(7.5000,9.0000) end=(7.5000,10.0000) radius=0.1250 destructible=True hp=5
+  Obstacle: start=(6.5000,5.0000) end=(6.5000,4.0000) radius=0.1250 destructible=True hp=5
+  Obstacle: start=(9.7500,9.5000) end=(9.2500,9.5000) radius=0.1250 destructible=True hp=5
+  Obstacle: start=(9.5000,6.2500) end=(9.5000,6.7500) radius=0.1250 destructible=True hp=5
+  Obstacle: start=(7.2500,6.5000) end=(7.7500,6.5000) radius=0.1250 destructible=True hp=5
+  Obstacle: start=(5.5000,6.5000) end=(5.5000,6.5000) radius=0.1250 destructible=True hp=5
+  Obstacle: start=(15.5000,8.5000) end=(15.5000,8.5000) radius=0.1250 destructible=False hp=0
+  Obstacle: start=(15.0000,8.5000) end=(15.2500,8.5000) radius=0.1250 destructible=True hp=5
+  Obstacle: start=(15.7500,8.5000) end=(16.0000,8.5000) radius=0.1250 destructible=True hp=5
+  Obstacle: start=(15.5000,8.0000) end=(15.5000,8.2500) radius=0.1250 destructible=True hp=5
+  Obstacle: start=(15.5000,8.7500) end=(15.5000,9.0000) radius=0.1250 destructible=True hp=5
+  Obstacle: start=(17.7500,5.5000) end=(19.2500,5.5000) radius=0.1250 destructible=True hp=5
+EncounterPlan.Count: 39
+  Spawn: region=2 cluster=0 pos=(660,220) type=Rusher
+  Spawn: region=2 cluster=0 pos=(836,308) type=Rusher
+  Spawn: region=2 cluster=0 pos=(660,308) type=Turret
+  Spawn: region=4 cluster=1 pos=(660,1452) type=StaticShooter
+  Spawn: region=4 cluster=1 pos=(572,1452) type=Swarmer
+  Spawn: region=4 cluster=1 pos=(572,1540) type=Roamer
+  Spawn: region=4 cluster=1 pos=(484,1452) type=Rusher
+  Spawn: region=4 cluster=1 pos=(396,1452) type=Roamer
+  Spawn: region=4 cluster=1 pos=(572,1364) type=Rusher
+  Spawn: region=4 cluster=1 pos=(484,1276) type=Swarmer
+  Spawn: region=4 cluster=1 pos=(484,1540) type=Swarmer
+  Spawn: region=2 cluster=2 pos=(484,484) type=StaticShooter
+  Spawn: region=2 cluster=2 pos=(484,396) type=Swarmer
+  Spawn: region=2 cluster=2 pos=(308,220) type=Roamer
+  Spawn: region=2 cluster=2 pos=(396,572) type=Rusher
+  Spawn: region=2 cluster=2 pos=(484,308) type=Swarmer
+  Spawn: region=2 cluster=2 pos=(396,308) type=Swarmer
+  Spawn: region=2 cluster=2 pos=(308,660) type=Roamer
+  Spawn: region=2 cluster=2 pos=(396,220) type=Swarmer
+  Spawn: region=2 cluster=2 pos=(396,396) type=Rusher
+  Spawn: region=2 cluster=2 pos=(308,396) type=Swarmer
+  Spawn: region=2 cluster=2 pos=(308,572) type=Swarmer
+  Spawn: region=2 cluster=2 pos=(308,484) type=Swarmer
+  Spawn: region=1 cluster=3 pos=(1452,2156) type=Rusher
+  Spawn: region=1 cluster=3 pos=(1716,2068) type=Swarmer
+  Spawn: region=1 cluster=3 pos=(1628,2244) type=Turret
+  Spawn: region=1 cluster=3 pos=(1716,1980) type=Swarmer
+  Spawn: region=1 cluster=3 pos=(1628,2068) type=Swarmer
+  Spawn: region=1 cluster=3 pos=(1628,2156) type=MobileGenerator
+  Spawn: region=1 cluster=3 pos=(1452,2068) type=Rusher
+  Spawn: region=3 cluster=4 pos=(1716,308) type=Spawner
+  Spawn: region=3 cluster=4 pos=(1540,572) type=StaticShooter
+  Spawn: region=3 cluster=4 pos=(1540,660) type=StaticShooter
+  Spawn: region=3 cluster=4 pos=(1628,660) type=Turret
+  Spawn: region=3 cluster=4 pos=(1804,308) type=Roamer
+  Spawn: region=3 cluster=4 pos=(1804,396) type=Swarmer
+  Spawn: region=3 cluster=4 pos=(1540,396) type=Rusher
+  Spawn: region=3 cluster=4 pos=(1452,572) type=Roamer
+  Spawn: region=3 cluster=4 pos=(1452,308) type=Roamer
+EncounterPlanHash: 26df3968929cfbeda3911d0539436e567c2f4e904e2a53a2b8b8efc42727a1a5

@@ -1,6 +1,6 @@
 # Arquitectura del Sistema - Twin Stick Shooter
 
-> **Última revisión:** 2026-10-01 / Fase 5+ (Optimización de ciclo de vida, IA de visión y arquitectura de entidades)
+> **Última revisión:** 2026-10-08 / Fase 0: red de seguridad (Tests de caracterización, Golden Master e Instrumentación)
 
 Documento de referencia técnica sobre la organización modular, ciclo de vida, estructuras de datos y principios de diseño del motor del juego.
 
@@ -197,20 +197,27 @@ twin-stick shooter/
 │           ├── room_medium_pillars.json# Plantilla de sala mediana con pilares de cobertura.
 │           └── room_small_trap.json    # Plantilla de trampa compacta para pasillos.
 │
-└── Game.Tests/                         # Suite de pruebas unitarias y de integración (xUnit)
+└── Game.Tests/                         # Suite de pruebas unitarias y de caracterización (xUnit)
     ├── Game.Tests.csproj               # Configuración del proyecto de pruebas.
+    ├── CameraTests.cs                  # Pruebas de caracterización para Camera (centrado, bounds, zoom, multi-jugador).
     ├── CollisionRegressionTests.cs     # Pruebas de regresión sobre detección de colisiones de la grilla.
     ├── CollisionWorldTests.cs          # Pruebas de límites del mundo y contención de entidades.
     ├── EncounterDirectorTests.cs       # Pruebas de presupuestos y generación determinista de encuentros.
     ├── EnemyManagerTests.cs            # Pruebas de comportamiento de los 7 arquetipos de enemigos y conteo regional.
+    ├── GoldenMasterTests.cs            # Golden Master de generación procedural determinista sobre 12 seeds.
+    ├── InputDeadzoneTests.cs           # Pruebas de caracterización para deadzones radiales en InputManager.
+    ├── LevelManagerInstrumentationTests.cs # Pruebas de instrumentación de contadores de colisión/penetración/sweep.
     ├── MapGeneratorCrawlerTests.cs     # Pruebas del generador por crawlers y conectividad de salas.
     ├── MapGeneratorTests.cs            # Pruebas de integración del pipeline de generación de mapas.
+    ├── ObjectPoolTests.cs              # Pruebas de caracterización para ciclo de vida y LIFO de ObjectPool<T>.
     ├── PhysicsHelperSlidingTests.cs    # Pruebas de deslizamiento físico contra paredes y esquinas.
     ├── PrimitiveDecompositionTests.cs  # Pruebas de descomposición de grillas en primitivas geométricas.
     ├── PrimitiveMapLifecycleTests.cs   # Pruebas de actualización y sincronización de revisiones del mapa.
     ├── RoomTemplateDataTests.cs        # Pruebas de serialización y lectura de plantillas JSON.
     ├── RoundedContourTests.cs          # Pruebas de cálculo de esquinas redondeadas y penetración.
-    └── RoundedPrimitiveMapTests.cs     # Pruebas de renderizado y consistencia geométrica de primitivas.
+    ├── RoundedPrimitiveMapTests.cs     # Pruebas de renderizado y consistencia geométrica de primitivas.
+    ├── ZeroAllocationTests.cs          # Pruebas de cero-alocaciones en caliente en simulación y pools.
+    └── Snapshots/                      # Snapshots textuales del Golden Master (golden_<seed>.txt).
 ```
 
 ---
@@ -236,3 +243,10 @@ twin-stick shooter/
 ### 3.5 Ciclo de Vida MonoGame
 * Todo acceso al sistema de archivos de disco (`RoomTemplateLoader.LoadAll`) y la generación procedural del mapa se ejecuta estrictamente dentro de `LoadContent()`.
 * Al finalizar la carga, se fuerza una recolección completa (`GC.Collect()` y `GC.WaitForPendingFinalizers()`), garantizando que la memoria transitoria del arranque quede purgada antes de iniciar el ciclo de juego.
+
+### 3.6 Red de Seguridad de Pruebas (Fase 0)
+* **Golden Master (`GoldenMasterTests`):** Registra el estado completo de la generación procedimental (`MapGenerator` y `EncounterDirector`) para 12 semillas fijas mediante snapshots textuales deterministas y hashes criptográficos (SHA-256) de grillas y encuentros. Para regenerar o actualizar un snapshot intencionalmente: eliminar el archivo correspondiente en `Game.Tests/Snapshots/golden_<seed>.txt` y ejecutar la suite dos veces (la primera genera el archivo y falla requiriendo revisión, la segunda valida su coincidencia exacta).
+* **Tests de Cero-Allocaciones (`ZeroAllocationTests`):** Mediante `GC.GetAllocatedBytesForCurrentThread()` sobre fases medidas posteriores a un warmup y recolección forzada, valida que la emisión y actualización de partículas, movimiento/spawns de proyectiles, ciclo de enemigos activos (`EnemyManager.Update`), generadores y manipulación de `ObjectPool<T>` produzcan exactamente 0 bytes de alocación en el heap durante el game loop.
+* **Instrumentación de Consultas (`LevelManager`):** En compilaciones `DEBUG`, `LevelManager` mantiene contadores acumulativos de consultas de colisión (`CollisionQueryCount`), penetración (`PenetrationQueryCount`) y barrido (`SweepQueryCount`) que pueden reiniciarse mediante `ResetQueryCounters()`. Permite auditar y perfilar el costo de colisiones frame a frame sin impacto de rendimiento en producción (`Release`).
+* **Cobertura total verificada:** 111 pruebas pasando en Debug y 110 pruebas en Release (excluyendo únicamente la prueba de contadores bajo directiva `#if DEBUG`).
+

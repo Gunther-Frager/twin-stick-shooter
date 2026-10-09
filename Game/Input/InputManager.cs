@@ -156,7 +156,7 @@ namespace TwinStickShooter.Input
         /// Deadzone radial (no por eje): más natural para apuntado 360°,
         /// evita el "cuadrado" de deadzone por eje y remapea [deadzone,1] -> [0,1].
         /// </summary>
-        private static Vector2 ApplyRadialDeadzone(Vector2 stick, float deadzone)
+        internal static Vector2 ApplyRadialDeadzone(Vector2 stick, float deadzone)
         {
             float length = stick.Length();
             if (length <= deadzone)
