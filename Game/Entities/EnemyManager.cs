@@ -219,8 +219,6 @@ namespace TwinStickShooter.Entities
             Rectangle? visibleWorldBounds = null)
         {
             Enemy[] items = _pool.Items;
-            int activeEnemies = 0;
-
             for (int i = 0; i < items.Length; i++)
             {
                 Enemy enemy = items[i];
@@ -233,7 +231,6 @@ namespace TwinStickShooter.Entities
                     UpdateDormantPatrol(enemy, deltaTime);
                     continue;
                 }
-                activeEnemies++;
 
                 switch (enemy.Type)
                 {
@@ -506,7 +503,6 @@ namespace TwinStickShooter.Entities
             if (offWorld)
             {
                 DeactivateEnemy(enemy);
-                Console.WriteLine($"[EnemyManager] Enemigo desactivado por salir del mundo.");
             }
         }
 

@@ -50,7 +50,6 @@ namespace TwinStickShooter.Entities
             }
 
             InvulnerabilityTimer = GameConstants.PlayerInvulnerabilitySeconds;
-            Console.WriteLine($"[Player] Jugador {Index} recibió daño. Health: {Health:0.##}");
         }
 
         /// <summary>Refresca la duración del slow sin acumular su intensidad.</summary>

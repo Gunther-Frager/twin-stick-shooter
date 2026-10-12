@@ -1,6 +1,6 @@
 # Arquitectura del Sistema - Twin Stick Shooter
 
-> **Última revisión:** 2026-10-08 / Fase 0: red de seguridad (Tests de caracterización, Golden Master e Instrumentación)
+> **Última revisión:** 2026-10-11 / Fase 1: higiene del repositorio y del código
 
 Documento de referencia técnica sobre la organización modular, ciclo de vida, estructuras de datos y principios de diseño del motor del juego.
 
@@ -132,6 +132,8 @@ Estructura exhaustiva de todos los módulos y archivos que conforman la solució
 
 ```text
 twin-stick shooter/
+├── .editorconfig                       # Convenciones de estilo (espaciado a 4 espacios, trim trailing whitespace).
+├── Directory.Build.props               # Configuración global de análisis estático (.NET Analyzers activados).
 ├── README.md                           # Guía de inicio, controles, requisitos y enlaces.
 ├── FOUNDATIONS.MD                      # Propósito del proyecto, alcance y directrices de cambio.
 ├── docs/
@@ -186,7 +188,7 @@ twin-stick shooter/
 │   │   ├── EnemyRenderer.cs            # Renderizado vectorial de enemigos según su arquetipo geométrico y color.
 │   │   ├── ParticleRenderer.cs         # Dibujo por lotes de partículas cuadradas mediante VertexPositionColor.
 │   │   ├── ShipRenderer.cs             # Dibujo de naves de jugadores, vectores de dirección y campos de fuerza/escudo.
-│   │   └── SpawnerRenderer.cs          # Dibujo de generadores estáticos con anillos de pulsación.
+│   │   └── SpawnerRenderer.cs          # Dibujo de generadores estáticos con capacidad parametrizada de buffer de vértices.
 │   │
 │   └── Content/                        # Recursos de datos (sin compilación MGCB obligatoria)
 │       ├── Maps/
@@ -216,6 +218,7 @@ twin-stick shooter/
     ├── RoomTemplateDataTests.cs        # Pruebas de serialización y lectura de plantillas JSON.
     ├── RoundedContourTests.cs          # Pruebas de cálculo de esquinas redondeadas y penetración.
     ├── RoundedPrimitiveMapTests.cs     # Pruebas de renderizado y consistencia geométrica de primitivas.
+    ├── SpawnerRendererTests.cs         # Pruebas unitarias de llenado de vértices y buffer seguro en SpawnerRenderer.
     ├── ZeroAllocationTests.cs          # Pruebas de cero-alocaciones en caliente en simulación y pools.
     └── Snapshots/                      # Snapshots textuales del Golden Master (golden_<seed>.txt).
 ```
@@ -248,5 +251,5 @@ twin-stick shooter/
 * **Golden Master (`GoldenMasterTests`):** Registra el estado completo de la generación procedimental (`MapGenerator` y `EncounterDirector`) para 12 semillas fijas mediante snapshots textuales deterministas y hashes criptográficos (SHA-256) de grillas y encuentros. Para regenerar o actualizar un snapshot intencionalmente: eliminar el archivo correspondiente en `Game.Tests/Snapshots/golden_<seed>.txt` y ejecutar la suite dos veces (la primera genera el archivo y falla requiriendo revisión, la segunda valida su coincidencia exacta).
 * **Tests de Cero-Allocaciones (`ZeroAllocationTests`):** Mediante `GC.GetAllocatedBytesForCurrentThread()` sobre fases medidas posteriores a un warmup y recolección forzada, valida que la emisión y actualización de partículas, movimiento/spawns de proyectiles, ciclo de enemigos activos (`EnemyManager.Update`), generadores y manipulación de `ObjectPool<T>` produzcan exactamente 0 bytes de alocación en el heap durante el game loop.
 * **Instrumentación de Consultas (`LevelManager`):** En compilaciones `DEBUG`, `LevelManager` mantiene contadores acumulativos de consultas de colisión (`CollisionQueryCount`), penetración (`PenetrationQueryCount`) y barrido (`SweepQueryCount`) que pueden reiniciarse mediante `ResetQueryCounters()`. Permite auditar y perfilar el costo de colisiones frame a frame sin impacto de rendimiento en producción (`Release`).
-* **Cobertura total verificada:** 111 pruebas pasando en Debug y 110 pruebas en Release (excluyendo únicamente la prueba de contadores bajo directiva `#if DEBUG`).
+* **Cobertura total verificada:** 114 pruebas pasando en Debug y 113 pruebas en Release (excluyendo únicamente la prueba de contadores bajo directiva `#if DEBUG`).
 

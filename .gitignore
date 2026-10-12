@@ -23,3 +23,8 @@ Thumbs.db
 
 # VS Code local history
 .history/
+
+# Logs and test outputs
+*.log
+TestResults/
+logs.txt

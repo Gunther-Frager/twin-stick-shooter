@@ -9,7 +9,9 @@ namespace TwinStickShooter.Rendering
         private readonly BasicEffect _effect;
         private readonly VertexPositionColor[] _vertices;
 
-        public SpawnerRenderer(GraphicsDevice graphicsDevice)
+        // La capacidad del buffer debe seguir a la del SpawnerManager para evitar
+        // desbordamientos (IndexOutOfRangeException) cuando se manejan más de GameConstants.MaxSpawners.
+        public SpawnerRenderer(GraphicsDevice graphicsDevice, int spawnerCapacity = GameConstants.MaxSpawners)
         {
             _effect = new BasicEffect(graphicsDevice)
             {
@@ -19,12 +21,11 @@ namespace TwinStickShooter.Rendering
                     0, GameConstants.ScreenWidth,
                     GameConstants.ScreenHeight, 0, 0f, 1f)
             };
-            _vertices = new VertexPositionColor[GameConstants.MaxSpawners * 6];
+            _vertices = new VertexPositionColor[System.Math.Max(1, spawnerCapacity) * 6];
         }
 
-        public void Draw(GraphicsDevice graphicsDevice, SpawnerManager.SpawnerData[] spawners, Matrix viewMatrix)
+        internal static int FillVertices(SpawnerManager.SpawnerData[] spawners, VertexPositionColor[] vertices)
         {
-            _effect.View = viewMatrix;
             int vertexCount = 0;
             for (int i = 0; i < spawners.Length; i++)
             {
@@ -42,13 +43,21 @@ namespace TwinStickShooter.Rendering
                 Vector3 bottomLeft = new Vector3(p.X - radius, p.Y + radius, 0f);
                 Vector3 bottomRight = new Vector3(p.X + radius, p.Y + radius, 0f);
 
-                _vertices[vertexCount++] = new VertexPositionColor(topLeft, color);
-                _vertices[vertexCount++] = new VertexPositionColor(topRight, color);
-                _vertices[vertexCount++] = new VertexPositionColor(bottomLeft, color);
-                _vertices[vertexCount++] = new VertexPositionColor(topRight, color);
-                _vertices[vertexCount++] = new VertexPositionColor(bottomRight, color);
-                _vertices[vertexCount++] = new VertexPositionColor(bottomLeft, color);
+                vertices[vertexCount++] = new VertexPositionColor(topLeft, color);
+                vertices[vertexCount++] = new VertexPositionColor(topRight, color);
+                vertices[vertexCount++] = new VertexPositionColor(bottomLeft, color);
+                vertices[vertexCount++] = new VertexPositionColor(topRight, color);
+                vertices[vertexCount++] = new VertexPositionColor(bottomRight, color);
+                vertices[vertexCount++] = new VertexPositionColor(bottomLeft, color);
             }
+
+            return vertexCount;
+        }
+
+        public void Draw(GraphicsDevice graphicsDevice, SpawnerManager.SpawnerData[] spawners, Matrix viewMatrix)
+        {
+            _effect.View = viewMatrix;
+            int vertexCount = FillVertices(spawners, _vertices);
 
             if (vertexCount == 0)
             {

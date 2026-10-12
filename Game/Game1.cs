@@ -107,7 +107,7 @@ namespace TwinStickShooter
             _particleRenderer = new ParticleRenderer(GraphicsDevice);
             _arenaRenderer = new ArenaRenderer(GraphicsDevice, _levelManager);
             _enemyRenderer = new EnemyRenderer(GraphicsDevice, _enemyManager.Capacity);
-            _spawnerRenderer = new SpawnerRenderer(GraphicsDevice);
+            _spawnerRenderer = new SpawnerRenderer(GraphicsDevice, _spawnerManager.Spawners.Length);
             _debugConsole.LoadContent(GraphicsDevice);
 
             // Contar paredes para depuración
@@ -356,13 +356,6 @@ namespace TwinStickShooter
         }
 
         /// <summary>
-        /// HUD de depuración mínimo: FPS, mandos conectados, y conteo de
-        /// balas/partículas activas (útil para verificar que el pooling
-        /// no está creciendo sin límite). Evita depender de SpriteFont.
-        /// </summary>
-        private string _debugMessage = "";
-
-        /// <summary>
         /// Muestra un mensaje en la consola de depuración.
         /// </summary>
         public void SetDebugMessage(string message)
@@ -370,6 +363,11 @@ namespace TwinStickShooter
             _debugConsole.AddMessage(message);
         }
 
+        /// <summary>
+        /// HUD de depuración mínimo: FPS, mandos conectados, y conteo de
+        /// balas/partículas activas (útil para verificar que el pooling
+        /// no está creciendo sin límite). Evita depender de SpriteFont.
+        /// </summary>
         private void UpdateDebugTitle(GameTime gameTime)
         {
             _frameCount++;
@@ -391,7 +389,7 @@ namespace TwinStickShooter
                     $"Twin-Stick Shooter | FPS: {fps:0} | Modo: {_currentGameState} | Mandos: {connected}/{GameConstants.MaxPlayers} " +
                     $"| Balas: {activeBullets}/{GameConstants.MaxBullets} " +
                     $"| Partículas: {activeParticles}/{GameConstants.MaxParticles} " +
-                    $"| Zoom: {_camera.ViewMatrix.M11:0.00} | {_debugMessage}";
+                    $"| Zoom: {_camera.ViewMatrix.M11:0.00}";
 
                 _fpsTimer = 0f;
                 _frameCount = 0;
