@@ -1,7 +1,6 @@
 using Microsoft.Xna.Framework;
 using System;
 using TwinStickShooter.Entities;
-using TwinStickShooter.Input;
 
 namespace TwinStickShooter.Core
 {
@@ -46,10 +45,9 @@ namespace TwinStickShooter.Core
         /// Actualiza la posición y el zoom de la cámara en base a los jugadores activos.
         /// </summary>
         /// <param name="players">Array de todos los jugadores.</param>
-        /// <param name="inputManager">Manager de input para verificar conexión.</param>
-        public void Update(Player[] players, InputManager inputManager)
+        public void Update(Player[] players)
         {
-            if (players == null || inputManager == null)
+            if (players == null)
                 return;
 
             // 1. Calcular centro de masa y límites (min/max) en un solo bucle sin allocations

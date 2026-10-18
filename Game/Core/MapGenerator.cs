@@ -13,7 +13,6 @@ namespace TwinStickShooter.Core
         private readonly int _width;
         private readonly int _height;
         private Random _random;
-        private List<RoomTemplateData> _roomTemplates = new List<RoomTemplateData>();
         private readonly List<MapRegionKind> _roomKinds = new List<MapRegionKind>();
 
         public MapGenerationSettings Settings { get; }
@@ -47,11 +46,6 @@ namespace TwinStickShooter.Core
             ZoneMap = new MapZoneType[width, height];
             RegionIdMap = new int[width, height];
             ClearRegionIds();
-        }
-
-        public void SetRoomTemplates(List<RoomTemplateData> templates)
-        {
-            _roomTemplates = templates ?? new List<RoomTemplateData>();
         }
 
         public int[,] GenerateMap()
@@ -330,7 +324,7 @@ namespace TwinStickShooter.Core
             int spawnX = _width / 2 - spawnRoomSize / 2;
             int spawnY = _height / 2 - spawnRoomSize / 2;
             Rectangle spawnRoom = new Rectangle(spawnX, spawnY, spawnRoomSize, spawnRoomSize);
-            CarveRoom(grid, spawnRoom, null);
+            CarveRoom(grid, spawnRoom);
             Rooms.Add(spawnRoom);
             _roomKinds.Add(MapRegionKind.Spawn);
             SpawnPoint = spawnRoom.Center;
@@ -861,119 +855,13 @@ namespace TwinStickShooter.Core
             return current + chosen;
         }
 
-        private bool TryInsertPrefab(int[,] grid, Point crawlerPosition, Point[] directions, out Rectangle placedRoom)
-        {
-            placedRoom = Rectangle.Empty;
-            if (_roomTemplates == null || _roomTemplates.Count == 0) return false;
-
-            int firstTemplate = _random.Next(_roomTemplates.Count);
-            if (Settings.MaxPrefabRooms <= 2)
-            {
-                int largestArea = -1;
-                for (int templateIndex = 0; templateIndex < _roomTemplates.Count; templateIndex++)
-                {
-                    RoomTemplateData template = _roomTemplates[templateIndex];
-                    if (template.Grid == null || template.Grid.Length == 0) continue;
-
-                    int templateWidth = 0;
-                    for (int y = 0; y < template.Grid.Length; y++)
-                    {
-                        if (template.Grid[y] != null)
-                            templateWidth = Math.Max(templateWidth, template.Grid[y].Length);
-                    }
-
-                    int area = templateWidth * template.Grid.Length;
-                    if (area > largestArea)
-                    {
-                        largestArea = area;
-                        firstTemplate = templateIndex;
-                    }
-                }
-            }
-
-            for (int templateOffset = 0; templateOffset < _roomTemplates.Count; templateOffset++)
-            {
-                RoomTemplateData template = _roomTemplates[(firstTemplate + templateOffset) % _roomTemplates.Count];
-                if (template.Grid == null || template.Grid.Length == 0) continue;
-                int templateHeight = template.Grid.Length;
-                int templateWidth = 0;
-                for (int y = 0; y < templateHeight; y++)
-                {
-                    if (template.Grid[y] != null) templateWidth = Math.Max(templateWidth, template.Grid[y].Length);
-                }
-                if (templateWidth < 3 || templateHeight < 3) continue;
-
-                int firstDirection = _random.Next(directions.Length);
-                for (int directionOffset = 0; directionOffset < directions.Length; directionOffset++)
-                {
-                    Point side = directions[(firstDirection + directionOffset) % directions.Length];
-                    for (int offset = 2; offset <= 4; offset++)
-                    {
-                        Rectangle candidate = GetPrefabBounds(crawlerPosition, side, offset, templateWidth, templateHeight);
-                        if (!CanPlacePrefab(grid, candidate)) continue;
-
-                        CarveRoom(grid, candidate, template);
-                        Point door = GetRoomDoor(candidate, crawlerPosition, side);
-                        Point outsideDoor = door - side;
-                        ConnectRooms(grid, crawlerPosition, outsideDoor);
-                        grid[door.X, door.Y] = 0;
-                        placedRoom = candidate;
-                        return true;
-                    }
-                }
-            }
-
-            return false;
-        }
-
-        private static Rectangle GetPrefabBounds(Point crawler, Point side, int offset, int width, int height)
-        {
-            int x = side.X > 0 ? crawler.X + offset : side.X < 0 ? crawler.X - offset - width + 1 : crawler.X - width / 2;
-            int y = side.Y > 0 ? crawler.Y + offset : side.Y < 0 ? crawler.Y - offset - height + 1 : crawler.Y - height / 2;
-            return new Rectangle(x, y, width, height);
-        }
-
-        private bool CanPlacePrefab(int[,] grid, Rectangle candidate)
-        {
-            Rectangle padded = new Rectangle(candidate.X - 1, candidate.Y - 1, candidate.Width + 2, candidate.Height + 2);
-            if (padded.Left <= 0 || padded.Top <= 0 || padded.Right >= _width - 1 || padded.Bottom >= _height - 1)
-            {
-                return false;
-            }
-
-            foreach (Rectangle room in Rooms)
-            {
-                if (padded.Intersects(room)) return false;
-            }
-
-            for (int x = candidate.Left; x < candidate.Right; x++)
-            {
-                for (int y = candidate.Top; y < candidate.Bottom; y++)
-                {
-                    if (grid[x, y] == 0) return false;
-                }
-            }
-
-            return true;
-        }
-
-        private static Point GetRoomDoor(Rectangle room, Point crawler, Point side)
-        {
-            if (side.X > 0) return new Point(room.Left, Math.Clamp(crawler.Y, room.Top + 1, room.Bottom - 2));
-            if (side.X < 0) return new Point(room.Right - 1, Math.Clamp(crawler.Y, room.Top + 1, room.Bottom - 2));
-            if (side.Y > 0) return new Point(Math.Clamp(crawler.X, room.Left + 1, room.Right - 2), room.Top);
-            return new Point(Math.Clamp(crawler.X, room.Left + 1, room.Right - 2), room.Bottom - 1);
-        }
-
-        private static void CarveRoom(int[,] grid, Rectangle room, RoomTemplateData template)
+        private static void CarveRoom(int[,] grid, Rectangle room)
         {
             for (int x = room.Left; x < room.Right; x++)
             {
                 for (int y = room.Top; y < room.Bottom; y++)
                 {
-                    bool isWall = false;
-                    if (template != null) template.TryGetCell(x - room.Left, y - room.Top, out isWall);
-                    grid[x, y] = isWall ? 1 : 0;
+                    grid[x, y] = 0;
                 }
             }
         }

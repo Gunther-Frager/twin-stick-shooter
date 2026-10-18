@@ -2,7 +2,7 @@
 
 Shooter cenital modular desarrollado en C# con **.NET 8** y **MonoGame DesktopGL**.
 
-El juego combina soporte para hasta cuatro jugadores locales, combate táctico contra 7 arquetipos de enemigos, generación procedural de mazmorras con pasillos y arenas orgánicas mediante crawlers y plantillas JSON, simulación física con deslizamiento en paredes y renderizado geométrico vectorial con primitivas 2D. No requiere herramientas externas como Node.js ni el Content Pipeline (MGCB) para los recursos actuales.
+El juego combina soporte para hasta cuatro jugadores locales, combate táctico contra 7 arquetipos de enemigos, generación procedural de mazmorras con pasillos y arenas orgánicas mediante crawlers, simulación física con deslizamiento en paredes y renderizado geométrico vectorial con primitivas 2D. No requiere herramientas externas como Node.js ni el Content Pipeline (MGCB) para los recursos actuales.
 
 ---
 
@@ -55,17 +55,26 @@ Ejecuta la suite completa de pruebas unitarias y de integración:
 dotnet test Game.Tests/Game.Tests.csproj
 ```
 
-La suite cubre 86 pruebas que garantizan:
+La suite cubre 124 pruebas (Debug) / 123 (Release) que garantizan:
 - Algoritmos de colisión contra grillas y primitivas geométricas (círculos, cápsulas, polígonos redondeados).
 - Físicas de deslizamiento contra paredes y resolución de penetración.
 - Generador procedural por crawlers, conectividad mediante MST y cálculo de caminos mínimos (BFS).
 - Planificación determinista de encuentros por presupuestos (`EncounterDirector`).
 - Comportamiento y ciclo de vida de los 7 arquetipos de enemigos y conteo regional $O(1)$.
-- Deserialización y validación de plantillas de salas en JSON.
+- Carga y validación de niveles prefabricados desde JSON (`MapLoader`).
+- Cámara dinámica (centrado, zoom, bounds) y deadzones radiales de entrada.
 
 ---
 
-## Arquetipos de Enemigos y Plantillas
+## Niveles Prefabricados
+
+Además de la generación procedural, el motor incluye soporte para cargar niveles diseñados manualmente desde archivos JSON mediante `MapLoader`. Los mapas se ubican en `Game/Content/Maps/` y definen una grilla de colisión, una posición de spawn y una posición de salida.
+
+Un mapa de ejemplo completo está disponible en `Game/Content/Maps/example_prefab.json` (30 × 30 celdas, borde perimetral sólido). Esta capacidad está prevista para niveles especiales, jefes o salas bonus, pero aún no está integrada en el flujo principal del juego.
+
+---
+
+## Arquetipos de Enemigos
 
 El motor soporta 7 tipos de enemigos completamente integrados en el combate y el sistema de generación:
 
@@ -77,4 +86,3 @@ El motor soporta 7 tipos de enemigos completamente integrados en el combate y el
 6. **`StaticShooter`**: Tirador de largo alcance con detección de línea de visión optimizada.
 7. **`MobileGenerator`**: Unidad acorazada móvil que patrulla la zona y produce Rushers.
 
-Las plantillas de sala ubicadas en `Game/Content/RoomTemplates/` permiten definir estructuras pre-diseñadas y ubicar marcadores `enemySpawns` con cualquiera de estos tipos.

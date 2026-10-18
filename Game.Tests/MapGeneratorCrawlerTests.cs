@@ -374,7 +374,7 @@ namespace TwinStickShooter.Tests
         }
 
         [Fact]
-        public void GenerateMap_ArenaExpansionDoesNotDependOnRoomTemplates()
+        public void GenerateMap_WithSingleCrawler_PlacesRequestedArena()
         {
             var generator = new MapGenerator(30, 30, new MapGenerationSettings
             {
@@ -385,14 +385,6 @@ namespace TwinStickShooter.Tests
                 MinArenaCount = 1,
                 MaxArenaCount = 1,
                 MinimumSpawnExitPathLength = 12,
-            });
-            generator.SetRoomTemplates(new List<RoomTemplateData>
-            {
-                new RoomTemplateData
-                {
-                    Id = "too_large",
-                    Grid = Enumerable.Repeat(new string('0', 19), 19).ToArray(),
-                }
             });
             int[,] map = generator.GenerateMap();
 
@@ -483,25 +475,6 @@ namespace TwinStickShooter.Tests
 
             Assert.True(generator.PrefabRoomsPlaced >= settings.MinPrefabRooms);
             Assert.True(generator.IsMapTraversable(map, generator.SpawnPoint, generator.ExitPoint));
-        }
-
-        private static List<RoomTemplateData> CreateTemplates()
-        {
-            return new List<RoomTemplateData>
-            {
-                new RoomTemplateData
-                {
-                    Id = "test_room",
-                    Grid = new[]
-                    {
-                        "11111",
-                        "10001",
-                        "10001",
-                        "10001",
-                        "11111",
-                    },
-                },
-            };
         }
 
         private static int CountZones(MapZoneType[,] zones, MapZoneType expected)

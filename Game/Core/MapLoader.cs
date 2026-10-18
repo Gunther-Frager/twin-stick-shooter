@@ -1,5 +1,4 @@
 using Microsoft.Xna.Framework;
-using Microsoft.Xna.Framework.Content;
 using System;
 using System.IO;
 using System.Text.Json;
@@ -7,79 +6,144 @@ using System.Text.Json;
 namespace TwinStickShooter.Core
 {
     /// <summary>
-    /// Carga mapas desde archivos JSON. Formato esperado:
+    /// Permite cargar niveles 100% prefabricados desde archivos o cadenas JSON, sin ejecutar generación procedural.
+    /// 
+    /// Formato esperado:
     /// {
     ///   "width": 30,
     ///   "height": 30,
-    ///   "grid": [0, 0, 1, 0, ...]
+    ///   "grid": [0, 0, 1, 0, ...],
+    ///   "spawn": { "x": 2, "y": 1 },
+    ///   "exit": { "x": 25, "y": 28 }
     /// }
-    /// Donde 0 = vacío, 1 = pared.
+    /// Donde en "grid": 0 = libre/suelo, 1 = pared sólida/colisión.
+    /// Requiere que "grid" contenga exactamente width * height elementos y que las dimensiones coincidan con el LevelManager.
     /// </summary>
     public static class MapLoader
     {
-        public static void LoadMap(LevelManager levelManager, ContentManager content, string mapPath)
+        /// <summary>
+        /// Resuelve la ruta del archivo de mapa prefabricado y delega la deserialización a <see cref="LoadMapFromJson"/>.
+        /// </summary>
+        /// <param name="levelManager">Instancia del nivel destino a configurar.</param>
+        /// <param name="mapPath">Ruta al archivo .json (absoluta o relativa a Content).</param>
+        /// <returns>True si el mapa fue cargado correctamente; de lo contrario, false.</returns>
+        public static bool LoadMap(LevelManager levelManager, string mapPath)
         {
-            // Cargar el archivo JSON usando la ruta relativa al ejecutable
-            string fullPath = Path.Combine(AppContext.BaseDirectory, "Content", mapPath + ".json");
+            string fullPath = mapPath;
+            if (!Path.IsPathRooted(fullPath))
+            {
+                if (!fullPath.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+                {
+                    fullPath += ".json";
+                }
+                fullPath = Path.Combine(AppContext.BaseDirectory, "Content", fullPath);
+            }
+
             Console.WriteLine($"[MapLoader] AppContext.BaseDirectory: {AppContext.BaseDirectory}");
             Console.WriteLine($"[MapLoader] Intentando cargar: {fullPath}");
-            
+
             if (!File.Exists(fullPath))
             {
                 Console.WriteLine("[MapLoader] ERROR: Archivo no encontrado en " + fullPath);
-                return;
+                return false;
             }
-            
-            try 
+
+            try
             {
                 string json = File.ReadAllText(fullPath);
-                var mapData = JsonSerializer.Deserialize<MapData>(json);
-                Console.WriteLine($"[MapLoader] Mapa cargado: {mapData.width}x{mapData.height}");
+                return LoadMapFromJson(levelManager, json);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("[MapLoader] ERROR al leer archivo de mapa: " + ex.Message);
+                return false;
+            }
+        }
 
-                for (int y = 0; y < mapData.height; y++)
-                {
-                    for (int x = 0; x < mapData.width; x++)
-                    {
-                        int index = y * mapData.width + x;
-                        if (index < mapData.grid.Length)
-                        {
-                            levelManager.SetCollision(x, y, mapData.grid[index] == 1);
-                        }
-                    }
-                }
+        /// <summary>
+        /// Carga y valida la estructura de un nivel prefabricado a partir de una cadena JSON, configurando colisiones,
+        /// malla de primitivas, spawn y exit en el <see cref="LevelManager"/> sin invocar generación procedural.
+        /// </summary>
+        /// <param name="levelManager">Nivel donde volcar las celdas y configuración.</param>
+        /// <param name="json">Cadena con el JSON a deserializar.</param>
+        /// <returns>True si el formato y dimensiones son válidos; false ante cualquier inconsistencia o error.</returns>
+        internal static bool LoadMapFromJson(LevelManager levelManager, string json)
+        {
+            if (levelManager == null || string.IsNullOrWhiteSpace(json))
+            {
+                Console.WriteLine("[MapLoader] ERROR: Parámetros inválidos (levelManager nulo o json vacío).");
+                return false;
+            }
 
-                levelManager.RebuildPrimitiveMapFromGrid();
-
-                // Almacenar los marcadores de spawn y salida en el LevelManager
-                if (mapData.spawn != null)
-                {
-                    Point spawnPoint = ValidateSpawnPoint(levelManager, mapData.spawn.x, mapData.spawn.y);
-                    levelManager.SetSpawnPosition(spawnPoint.X, spawnPoint.Y);
-                }
-                else
-                {
-                    Console.WriteLine("[MapLoader] ERROR: El mapa no define un punto de 'spawn'.");
-                }
-
-                if (mapData.exit != null)
-                {
-                    Point exitPoint = ValidateSpawnPoint(levelManager, mapData.exit.x, mapData.exit.y);
-                    levelManager.SetExitPosition(exitPoint.X, exitPoint.Y);
-                }
-                else
-                {
-                    Console.WriteLine("[MapLoader] ERROR: El mapa no define un punto de 'exit'.");
-                }
+            MapData mapData;
+            try
+            {
+                mapData = JsonSerializer.Deserialize<MapData>(json);
             }
             catch (Exception ex)
             {
                 Console.WriteLine("[MapLoader] ERROR al procesar JSON: " + ex.Message);
+                return false;
             }
-        }
 
-        public static void GenerateProceduralMap(LevelManager levelManager)
-        {
-            levelManager.GenerateProceduralMap();
+            if (mapData == null)
+            {
+                Console.WriteLine("[MapLoader] ERROR: El JSON deserializado es nulo.");
+                return false;
+            }
+
+            if (mapData.grid == null)
+            {
+                Console.WriteLine("[MapLoader] ERROR: El mapa no contiene un array 'grid'.");
+                return false;
+            }
+
+            if (mapData.width != levelManager.GridWidth || mapData.height != levelManager.GridHeight)
+            {
+                Console.WriteLine($"[MapLoader] ERROR: Dimensiones inconsistentes. Esperado: {levelManager.GridWidth}x{levelManager.GridHeight}, obtenido: {mapData.width}x{mapData.height}.");
+                return false;
+            }
+
+            if (mapData.grid.Length != mapData.width * mapData.height)
+            {
+                Console.WriteLine($"[MapLoader] ERROR: El tamaño del grid ({mapData.grid.Length}) no coincide con width*height ({mapData.width * mapData.height}).");
+                return false;
+            }
+
+            Console.WriteLine($"[MapLoader] Mapa cargado: {mapData.width}x{mapData.height}");
+
+            for (int y = 0; y < mapData.height; y++)
+            {
+                for (int x = 0; x < mapData.width; x++)
+                {
+                    int index = y * mapData.width + x;
+                    levelManager.SetCollision(x, y, mapData.grid[index] == 1);
+                }
+            }
+
+            levelManager.RebuildPrimitiveMapFromGrid();
+
+            if (mapData.spawn != null)
+            {
+                Point spawnPoint = ValidateSpawnPoint(levelManager, mapData.spawn.x, mapData.spawn.y);
+                levelManager.SetSpawnPosition(spawnPoint.X, spawnPoint.Y);
+            }
+            else
+            {
+                Console.WriteLine("[MapLoader] ERROR: El mapa no define un punto de 'spawn'.");
+            }
+
+            if (mapData.exit != null)
+            {
+                Point exitPoint = ValidateSpawnPoint(levelManager, mapData.exit.x, mapData.exit.y);
+                levelManager.SetExitPosition(exitPoint.X, exitPoint.Y);
+            }
+            else
+            {
+                Console.WriteLine("[MapLoader] ERROR: El mapa no define un punto de 'exit'.");
+            }
+
+            return true;
         }
 
         private class MapData

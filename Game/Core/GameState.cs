@@ -5,7 +5,6 @@ namespace TwinStickShooter.Core
     /// </summary>
     public enum GameState
     {
-        MainMenu,
         SinglePlayer,
         Multiplayer
     }

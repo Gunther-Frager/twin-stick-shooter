@@ -108,7 +108,6 @@ namespace TwinStickShooter.Core
         
         // --- Generación de mapas ---
         public const int MaxGenerationAttempts = 20; // Intentos máximos para generar un mapa transitable
-        public const float MinSpawnExitDistance = 15f; // Distancia mínima en celdas entre spawn y salida
         public const int SpawnRoomMinWidth = 2;
     }
 }

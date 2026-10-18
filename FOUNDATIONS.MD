@@ -23,7 +23,7 @@ Twin Stick Shooter es un juego de acción cenital modular desarrollado en C# con
 - **Física y colisiones:** Primitivas geométricas (círculos, cápsulas y polígonos redondeados), detección continua de colisiones y deslizamiento suave en paredes.
 - **Optimización de memoria:** Política de asignación cero en caliente mediante `ObjectPool<T>` (balas y enemigos), partículas struct-based y conteo regional $O(1)$.
 - **Renderizado geométrico:** Dibujo vectorial con `BasicEffect` y `VertexPositionColor`, sin necesidad de Content Pipeline (MGCB) para los recursos actuales.
-- **Pruebas automatizadas:** Suite de 86 pruebas xUnit que validan física, colisiones, generación, IA de enemigos y ciclo de vida.
+- **Pruebas automatizadas:** Suite de 124 pruebas (Debug) / 123 (Release) xUnit que validan física, colisiones, generación, IA de enemigos, ciclo de vida, cámara dinámica, deadzones de entrada y carga de niveles prefabricados desde JSON.
 
 ## Arquitectura
 
@@ -36,7 +36,7 @@ Distribución modular por responsabilidad:
 - `Game/Entities/`: Jugadores, enemigos, balas, partículas y managers de ciclo de vida.
 - `Game/Input/`: Normalización de entrada para teclado, mouse y múltiples mandos.
 - `Game/Rendering/`: Mallas de vértices, dibujo de naves, arena, enemigos y efectos visuales.
-- `Game/Content/`: Mapas y plantillas de salas en formato JSON.
+- `Game/Content/`: Mapas en formato JSON para carga directa de niveles prefabricados.
 - `Game.Tests/`: Pruebas unitarias y de integración del motor.
 
 ## Fuera del alcance implementado
@@ -61,4 +61,5 @@ Estas son posibilidades futuras, no capacidades que deban asumirse al modificar 
 
 ## Próximas áreas posibles
 
-La evolución del proyecto puede abordar audio procedural, progresión entre niveles, sistema de puntuación, efectos de postprocesado o juego cooperativo en red. Cada nuevo sistema deberá diseñarse, documentarse y probarse con pruebas de regresión.
+La evolución del proyecto puede abordar audio procedural, progresión entre niveles, sistema de puntuación, efectos de postprocesado o juego cooperativo en red. La infraestructura de `MapLoader` ya soporta niveles prefabricados en JSON, listos para integrarse en el flujo del juego para jefes, salas bonus o niveles especiales. Cada nuevo sistema deberá diseñarse, documentarse y probarse con pruebas de regresión.
+

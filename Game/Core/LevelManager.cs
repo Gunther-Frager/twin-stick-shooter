@@ -42,6 +42,9 @@ namespace TwinStickShooter.Core
         public bool UseRoundedContours { get; set; } = true;
         public IReadOnlyList<MapRoundedPoly> PrimitiveRoundedPolys => _primitiveRoundedPolys;
         public IReadOnlyList<ArenaObstacle> ArenaObstacles => _arenaObstacles;
+        public int GridWidth => _gridWidth;
+        public int GridHeight => _gridHeight;
+        public int CellSize => _cellSize;
         public float WorldWidth => _gridWidth * _cellSize;
         public float WorldHeight => _gridHeight * _cellSize;
         public int PrimitiveMapRevision { get; private set; }
@@ -514,11 +517,6 @@ namespace TwinStickShooter.Core
         {
             Vector2 exitWorldPosition = GridToWorld(_exitPosition);
             return Vector2.Distance(playerPosition, exitWorldPosition) < _cellSize;
-        }
-
-        public void SetRoomTemplates(System.Collections.Generic.List<RoomTemplateData> templates)
-        {
-            _mapGenerator.SetRoomTemplates(templates);
         }
 
         public void SetPrimitiveMap(MapDefinition definition)

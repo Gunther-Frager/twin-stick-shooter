@@ -32,7 +32,6 @@ namespace TwinStickShooter
         private SpawnerManager _spawnerManager;
         private EnemyRenderer _enemyRenderer;
         private SpawnerRenderer _spawnerRenderer;
-        private List<RoomTemplateData> _roomTemplates;
 
         // Estado del juego
         private GameState _currentGameState = GameState.SinglePlayer;
@@ -93,11 +92,6 @@ namespace TwinStickShooter
 
         protected override void LoadContent()
         {
-            // Cargar plantillas de sala para uso del generador de mapas
-            _roomTemplates = RoomTemplateLoader.LoadAll(Content);
-            Console.WriteLine($"[Game1] Plantillas de sala cargadas: {_roomTemplates.Count}");
-            _levelManager.SetRoomTemplates(_roomTemplates);
-
             // Cargar nivel procedural y configurar mapa
             InitializeLevel();
 
@@ -203,7 +197,7 @@ namespace TwinStickShooter
                     }
                 }
             }
-            _camera.Update(_players, _inputManager);
+            _camera.Update(_players);
 
             for (int i = 0; i < GameConstants.MaxPlayers; i++)
             {
@@ -472,14 +466,6 @@ namespace TwinStickShooter
                 }
             }
             return wallCount;
-        }
-
-        /// <summary>
-        /// Genera un mapa procedural y actualiza la geometría del renderizador.
-        /// </summary>
-        public void GenerateProceduralMap()
-        {
-            LoadNormalScene();
         }
 
         /// <summary>

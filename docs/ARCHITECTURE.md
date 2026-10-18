@@ -1,6 +1,6 @@
 # Arquitectura del Sistema - Twin Stick Shooter
 
-> **Última revisión:** 2026-10-11 / Fase 1: higiene del repositorio y del código
+> **Última revisión:** 2026-10-12 / Fase 2: código muerto y niveles prefabricados
 
 Documento de referencia técnica sobre la organización modular, ciclo de vida, estructuras de datos y principios de diseño del motor del juego.
 
@@ -18,9 +18,7 @@ flowchart TD
         C --> D[InitializeManagers]
         D --> E[base.Initialize]
         E --> F[Game1.LoadContent]
-        F --> F1[RoomTemplateLoader.LoadAll]
-        F1 --> F2[LevelManager.SetRoomTemplates]
-        F2 --> F3[InitializeLevel / LoadNormalScene]
+        F --> F3[InitializeLevel / LoadNormalScene]
         F3 --> F4[Instanciación de Renderers]
         F4 --> F5[GC.Collect & WaitForPendingFinalizers]
     end
@@ -164,8 +162,6 @@ twin-stick shooter/
 │   │   ├── MapZoneType.cs              # Tipificación de zonas de generación de terreno.
 │   │   ├── ObjectPool.cs               # Pool genérico de alto rendimiento para reutilización sin garbage collection.
 │   │   ├── PhysicsHelper.cs            # Resolución de movimiento con deslizamiento suave contra geometría compleja.
-│   │   ├── RoomTemplateData.cs         # Modelo de datos para plantillas de sala deserializadas desde JSON.
-│   │   ├── RoomTemplateLoader.cs       # Cargador de plantillas prediseñadas desde Content/RoomTemplates.
 │   │   ├── RoundedContour.cs           # Algoritmos de contornos redondeados, offset de aristas y pruebas de penetración.
 │   │   └── SpawnerManager.cs           # Administrador y ciclo de vida de generadores anclados al mapa.
 │   │
@@ -191,13 +187,8 @@ twin-stick shooter/
 │   │   └── SpawnerRenderer.cs          # Dibujo de generadores estáticos con capacidad parametrizada de buffer de vértices.
 │   │
 │   └── Content/                        # Recursos de datos (sin compilación MGCB obligatoria)
-│       ├── Maps/
-│       │   └── test_map.json           # Mapa estático de prueba para pruebas directas de carga.
-│       └── RoomTemplates/
-│           ├── room_large_arena.json   # Plantilla de sala grande para combates mayores.
-│           ├── room_medium_ambush.json # Plantilla de emboscada con obstáculos.
-│           ├── room_medium_pillars.json# Plantilla de sala mediana con pilares de cobertura.
-│           └── room_small_trap.json    # Plantilla de trampa compacta para pasillos.
+│       └── Maps/
+│           └── example_prefab.json     # Mapa prefabricado de ejemplo 30×30, borde perimetral sólido, spawn (2,2), exit (27,27).
 │
 └── Game.Tests/                         # Suite de pruebas unitarias y de caracterización (xUnit)
     ├── Game.Tests.csproj               # Configuración del proyecto de pruebas.
@@ -211,11 +202,11 @@ twin-stick shooter/
     ├── LevelManagerInstrumentationTests.cs # Pruebas de instrumentación de contadores de colisión/penetración/sweep.
     ├── MapGeneratorCrawlerTests.cs     # Pruebas del generador por crawlers y conectividad de salas.
     ├── MapGeneratorTests.cs            # Pruebas de integración del pipeline de generación de mapas.
+    ├── MapLoaderTests.cs               # Pruebas de carga, validación y casos error de MapLoader.
     ├── ObjectPoolTests.cs              # Pruebas de caracterización para ciclo de vida y LIFO de ObjectPool<T>.
     ├── PhysicsHelperSlidingTests.cs    # Pruebas de deslizamiento físico contra paredes y esquinas.
     ├── PrimitiveDecompositionTests.cs  # Pruebas de descomposición de grillas en primitivas geométricas.
     ├── PrimitiveMapLifecycleTests.cs   # Pruebas de actualización y sincronización de revisiones del mapa.
-    ├── RoomTemplateDataTests.cs        # Pruebas de serialización y lectura de plantillas JSON.
     ├── RoundedContourTests.cs          # Pruebas de cálculo de esquinas redondeadas y penetración.
     ├── RoundedPrimitiveMapTests.cs     # Pruebas de renderizado y consistencia geométrica de primitivas.
     ├── SpawnerRendererTests.cs         # Pruebas unitarias de llenado de vértices y buffer seguro en SpawnerRenderer.
@@ -244,12 +235,13 @@ twin-stick shooter/
 * La reconstrucción de mallas en `ArenaRenderer` responde a un número de revisión (`PrimitiveMapRevision`), ejecutándose únicamente cuando el mapa se carga o cuando un obstáculo destructible es efectivamente destruido, no en cada frame ni ante simples daños menores.
 
 ### 3.5 Ciclo de Vida MonoGame
-* Todo acceso al sistema de archivos de disco (`RoomTemplateLoader.LoadAll`) y la generación procedural del mapa se ejecuta estrictamente dentro de `LoadContent()`.
+* Todo acceso al sistema de archivos de disco y la generación procedural del mapa se ejecuta estrictamente dentro de `LoadContent()`. Los niveles prefabricados pueden cargarse en cualquier momento mediante `MapLoader.LoadMap(levelManager, path)`, que resuelve la ruta relativa a `AppContext.BaseDirectory` y devuelve `bool` para indicar éxito.
 * Al finalizar la carga, se fuerza una recolección completa (`GC.Collect()` y `GC.WaitForPendingFinalizers()`), garantizando que la memoria transitoria del arranque quede purgada antes de iniciar el ciclo de juego.
 
-### 3.6 Red de Seguridad de Pruebas (Fase 0)
+### 3.6 Red de Seguridad de Pruebas (Fase 0 → Fase 2)
 * **Golden Master (`GoldenMasterTests`):** Registra el estado completo de la generación procedimental (`MapGenerator` y `EncounterDirector`) para 12 semillas fijas mediante snapshots textuales deterministas y hashes criptográficos (SHA-256) de grillas y encuentros. Para regenerar o actualizar un snapshot intencionalmente: eliminar el archivo correspondiente en `Game.Tests/Snapshots/golden_<seed>.txt` y ejecutar la suite dos veces (la primera genera el archivo y falla requiriendo revisión, la segunda valida su coincidencia exacta).
 * **Tests de Cero-Allocaciones (`ZeroAllocationTests`):** Mediante `GC.GetAllocatedBytesForCurrentThread()` sobre fases medidas posteriores a un warmup y recolección forzada, valida que la emisión y actualización de partículas, movimiento/spawns de proyectiles, ciclo de enemigos activos (`EnemyManager.Update`), generadores y manipulación de `ObjectPool<T>` produzcan exactamente 0 bytes de alocación en el heap durante el game loop.
 * **Instrumentación de Consultas (`LevelManager`):** En compilaciones `DEBUG`, `LevelManager` mantiene contadores acumulativos de consultas de colisión (`CollisionQueryCount`), penetración (`PenetrationQueryCount`) y barrido (`SweepQueryCount`) que pueden reiniciarse mediante `ResetQueryCounters()`. Permite auditar y perfilar el costo de colisiones frame a frame sin impacto de rendimiento en producción (`Release`).
-* **Cobertura total verificada:** 114 pruebas pasando en Debug y 113 pruebas en Release (excluyendo únicamente la prueba de contadores bajo directiva `#if DEBUG`).
+* **Cobertura total verificada:** 124 pruebas pasando en Debug y 123 en Release (excluyendo únicamente la prueba de contadores bajo directiva `#if DEBUG`).
+
 
