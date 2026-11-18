@@ -244,11 +244,11 @@ namespace TwinStickShooter.Core
             float bestDistanceSquared = float.MaxValue;
             closest = p;
             normal = Vector2.UnitX;
+            MapRoundedPoly.Edge winningEdge = null;
 
             foreach (MapRoundedPoly.Edge edge in poly.Edges)
             {
                 Vector2 candidate;
-                Vector2 candidateNormal;
                 if (edge is MapRoundedPoly.Segment segment)
                 {
                     Vector2 direction = segment.B - segment.A;
@@ -256,9 +256,6 @@ namespace TwinStickShooter.Core
                     float amount = lengthSquared <= Epsilon ? 0f : Vector2.Dot(p - segment.A, direction) / lengthSquared;
                     amount = MathHelper.Clamp(amount, 0f, 1f);
                     candidate = segment.A + direction * amount;
-                    candidateNormal = lengthSquared <= Epsilon
-                        ? Vector2.UnitX
-                        : Vector2.Normalize(new Vector2(direction.Y, -direction.X));
                 }
                 else if (edge is MapRoundedPoly.Arc arc)
                 {
@@ -276,11 +273,6 @@ namespace TwinStickShooter.Core
                         Vector2 end = PointOnArc(arc, arc.EndAngle);
                         candidate = Vector2.DistanceSquared(p, start) <= Vector2.DistanceSquared(p, end) ? start : end;
                     }
-
-                    Vector2 arcRadial = candidate - arc.Center;
-                    candidateNormal = arcRadial.LengthSquared() <= Epsilon
-                        ? Vector2.UnitX
-                        : Vector2.Normalize(arcRadial) * MathF.Sign(arc.EndAngle - arc.StartAngle);
                 }
                 else
                 {
@@ -292,8 +284,23 @@ namespace TwinStickShooter.Core
                 {
                     bestDistanceSquared = distanceSquared;
                     closest = candidate;
-                    normal = candidateNormal;
+                    winningEdge = edge;
                 }
+            }
+
+            if (winningEdge is MapRoundedPoly.Segment winningSegment)
+            {
+                Vector2 direction = winningSegment.B - winningSegment.A;
+                normal = direction.LengthSquared() <= Epsilon
+                    ? Vector2.UnitX
+                    : Vector2.Normalize(new Vector2(direction.Y, -direction.X));
+            }
+            else if (winningEdge is MapRoundedPoly.Arc winningArc)
+            {
+                Vector2 arcRadial = closest - winningArc.Center;
+                normal = arcRadial.LengthSquared() <= Epsilon
+                    ? Vector2.UnitX
+                    : Vector2.Normalize(arcRadial) * MathF.Sign(winningArc.EndAngle - winningArc.StartAngle);
             }
         }
 

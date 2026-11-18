@@ -24,6 +24,10 @@ namespace TwinStickShooter.Core
         private readonly SpawnerData[] _spawners;
         private readonly EnemyManager _enemyManager;
         private readonly System.Collections.Generic.HashSet<int> _activatedRegions = new System.Collections.Generic.HashSet<int>();
+        private int _activeCount;
+
+        /// <summary>Versión que se incrementa en cada destrucción o reseteo de generadores.</summary>
+        internal int DeathVersion { get; private set; }
 
         public SpawnerManager(int capacity, EnemyManager enemyManager)
         {
@@ -38,21 +42,7 @@ namespace TwinStickShooter.Core
             return index >= 0 && index < _spawners.Length ? _spawners[index].Health : 0f;
         }
 
-        public int ActiveCount
-        {
-            get
-            {
-                int count = 0;
-                for (int i = 0; i < _spawners.Length; i++)
-                {
-                    if (_spawners[i].Active)
-                    {
-                        count++;
-                    }
-                }
-                return count;
-            }
-        }
+        public int ActiveCount => _activeCount;
 
         /// <summary>Incluye spawners Dormant: la región no está limpia mientras quede alguno vivo.</summary>
         public int GetAliveCountInRegion(int regionId)
@@ -81,6 +71,7 @@ namespace TwinStickShooter.Core
                         Dormant = regionId > 0,
                         RegionId = regionId,
                     };
+                    _activeCount++;
                     return true;
                 }
             }
@@ -110,6 +101,8 @@ namespace TwinStickShooter.Core
                 _spawners[i].Timer = 0f;
             }
             _activatedRegions.Clear();
+            _activeCount = 0;
+            DeathVersion++;
         }
 
         public void Update(float deltaTime)
@@ -168,6 +161,8 @@ namespace TwinStickShooter.Core
             {
                 _spawners[index].Health = 0f;
                 _spawners[index].Active = false;
+                _activeCount--;
+                DeathVersion++;
             }
 
             return true;
@@ -175,10 +170,13 @@ namespace TwinStickShooter.Core
 
         public int FindHit(Vector2 position, float radius)
         {
+            float hitRadius = radius + GameConstants.SpawnerRadius;
+            float hitRadiusSquared = hitRadius * hitRadius;
+
             for (int i = 0; i < _spawners.Length; i++)
             {
                 if (_spawners[i].Active &&
-                    Vector2.Distance(position, _spawners[i].Position) < radius + GameConstants.SpawnerRadius)
+                    Vector2.DistanceSquared(position, _spawners[i].Position) < hitRadiusSquared)
                 {
                     return i;
                 }

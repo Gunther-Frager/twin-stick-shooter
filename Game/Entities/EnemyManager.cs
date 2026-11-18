@@ -27,28 +27,18 @@ namespace TwinStickShooter.Entities
         }
 
         /// <summary>Capacidad preasignada de actores móviles.</summary>
+        private int _activeCount;
+
+        /// <summary>Versión que se incrementa en cada desactivación o limpieza de enemigos.</summary>
+        internal int DeathVersion { get; private set; }
+
         public int Capacity => _pool.Capacity;
 
         /// <summary>Array fijo de enemigos (activas e inactivas); usado por el renderer.</summary>
         public Enemy[] Enemies => _pool.Items;
 
         /// <summary>Cantidad de enemigos activos actualmente.</summary>
-        public int ActiveCount
-        {
-            get
-            {
-                int count = 0;
-                Enemy[] items = _pool.Items;
-                for (int i = 0; i < items.Length; i++)
-                {
-                    if (items[i].Active)
-                    {
-                        count++;
-                    }
-                }
-                return count;
-            }
-        }
+        public int ActiveCount => _activeCount;
 
         public void Clear()
         {
@@ -62,6 +52,8 @@ namespace TwinStickShooter.Entities
             }
             _activatedRegions.Clear();
             _aliveCountPerRegion.Clear();
+            _activeCount = 0;
+            DeathVersion++;
         }
 
         public bool Spawn(Vector2 position, Vector2 velocity, EnemyType type = EnemyType.Swarmer, int regionId = -1)
@@ -77,6 +69,7 @@ namespace TwinStickShooter.Entities
                 return false; // pool lleno: se descarta el spawn en vez de alocar de más
             }
 
+            _activeCount++;
             enemy.PoolIndex = index;
             enemy.Type = type;
             enemy.RegionId = regionId;
@@ -172,6 +165,8 @@ namespace TwinStickShooter.Entities
             }
 
             enemy.Active = false;
+            _activeCount--;
+            DeathVersion++;
             _pool.Release(enemy.PoolIndex);
         }
 
@@ -202,8 +197,10 @@ namespace TwinStickShooter.Entities
             for (int i = 0; i < _pool.Items.Length; i++)
             {
                 Enemy enemy = _pool.Items[i];
-                if (enemy.Active &&
-                    Vector2.Distance(position, enemy.Position) < radius + enemy.Radius)
+                if (!enemy.Active) continue;
+
+                float hitRadius = radius + enemy.Radius;
+                if (Vector2.DistanceSquared(position, enemy.Position) < hitRadius * hitRadius)
                 {
                     return i;
                 }

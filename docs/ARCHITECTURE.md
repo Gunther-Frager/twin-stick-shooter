@@ -1,6 +1,6 @@
 # Arquitectura del Sistema - Twin Stick Shooter
 
-> **Última revisión:** 2026-10-12 / Fase 2: código muerto y niveles prefabricados
+> **Última revisión:** 2026-10-19 / Fase 3: hotspots baratos y medición
 
 Documento de referencia técnica sobre la organización modular, ciclo de vida, estructuras de datos y principios de diseño del motor del juego.
 
@@ -146,7 +146,8 @@ twin-stick shooter/
 │   │   ├── ArenaObstacle.cs            # Estructura y lógica de obstáculos de arena destructibles/sólidos.
 │   │   ├── ArenaObstacleDefinition.cs  # Definición y metadatos de obstáculos generados proceduralmente.
 │   │   ├── Camera.cs                   # Cámara 2D con centro de masa multijugador, lerp y zoom dinámico.
-│   │   ├── DebugConsole.cs             # Consola visual y panel de desarrollo dibujado mediante mini-fuente 5x7.
+│   │   ├── ClearedRegionTracker.cs     # Rastreador de regiones despejadas con invalidación por versión de muertes (DeathVersion).
+│   │   ├── DebugConsole.cs             # Consola visual y panel de desarrollo dibujado mediante mini-fuente 5x7 y atlas de glifos.
 │   │   ├── EncounterDirector.cs        # Planificador determinista de grupos de enemigos por presupuesto regional.
 │   │   ├── EnemyAwarenessState.cs      # Estados de alerta (Dormant, Active) para enemigos por salas.
 │   │   ├── EnemyType.cs                # Enumerador de los 7 arquetipos de enemigos del juego.
@@ -193,20 +194,26 @@ twin-stick shooter/
 └── Game.Tests/                         # Suite de pruebas unitarias y de caracterización (xUnit)
     ├── Game.Tests.csproj               # Configuración del proyecto de pruebas.
     ├── CameraTests.cs                  # Pruebas de caracterización para Camera (centrado, bounds, zoom, multi-jugador).
+    ├── ClearedRegionTrackerTests.cs    # Pruebas de invalidación y filtrado condicional en ClearedRegionTracker.
     ├── CollisionRegressionTests.cs     # Pruebas de regresión sobre detección de colisiones de la grilla.
     ├── CollisionWorldTests.cs          # Pruebas de límites del mundo y contención de entidades.
+    ├── DebugConsoleTests.cs            # Pruebas unitarias del generador de atlas de glifos 5x7 en DebugConsole.
     ├── EncounterDirectorTests.cs       # Pruebas de presupuestos y generación determinista de encuentros.
     ├── EnemyManagerTests.cs            # Pruebas de comportamiento de los 7 arquetipos de enemigos y conteo regional.
+    ├── FindHitEquivalenceTests.cs      # Pruebas de equivalencia matemática para detección de impactos con DistanceSquared.
     ├── GoldenMasterTests.cs            # Golden Master de generación procedural determinista sobre 12 seeds.
     ├── InputDeadzoneTests.cs           # Pruebas de caracterización para deadzones radiales en InputManager.
     ├── LevelManagerInstrumentationTests.cs # Pruebas de instrumentación de contadores de colisión/penetración/sweep.
+    ├── ManagerCountersTests.cs         # Pruebas de consistencia de contadores incrementales ActiveCount y DeathVersion.
     ├── MapGeneratorCrawlerTests.cs     # Pruebas del generador por crawlers y conectividad de salas.
     ├── MapGeneratorTests.cs            # Pruebas de integración del pipeline de generación de mapas.
     ├── MapLoaderTests.cs               # Pruebas de carga, validación y casos error de MapLoader.
     ├── ObjectPoolTests.cs              # Pruebas de caracterización para ciclo de vida y LIFO de ObjectPool<T>.
+    ├── PerfHarnessTests.cs             # Arnés de micro-medición y benchmarking de simulación y geometría (Category=Perf).
     ├── PhysicsHelperSlidingTests.cs    # Pruebas de deslizamiento físico contra paredes y esquinas.
     ├── PrimitiveDecompositionTests.cs  # Pruebas de descomposición de grillas en primitivas geométricas.
     ├── PrimitiveMapLifecycleTests.cs   # Pruebas de actualización y sincronización de revisiones del mapa.
+    ├── RoundedContourEquivalenceTests.cs # Pruebas de equivalencia para RoundedContour.ClosestPoint (normal solo del ganador).
     ├── RoundedContourTests.cs          # Pruebas de cálculo de esquinas redondeadas y penetración.
     ├── RoundedPrimitiveMapTests.cs     # Pruebas de renderizado y consistencia geométrica de primitivas.
     ├── SpawnerRendererTests.cs         # Pruebas unitarias de llenado de vértices y buffer seguro en SpawnerRenderer.
@@ -238,10 +245,19 @@ twin-stick shooter/
 * Todo acceso al sistema de archivos de disco y la generación procedural del mapa se ejecuta estrictamente dentro de `LoadContent()`. Los niveles prefabricados pueden cargarse en cualquier momento mediante `MapLoader.LoadMap(levelManager, path)`, que resuelve la ruta relativa a `AppContext.BaseDirectory` y devuelve `bool` para indicar éxito.
 * Al finalizar la carga, se fuerza una recolección completa (`GC.Collect()` y `GC.WaitForPendingFinalizers()`), garantizando que la memoria transitoria del arranque quede purgada antes de iniciar el ciclo de juego.
 
-### 3.6 Red de Seguridad de Pruebas (Fase 0 → Fase 2)
+### 3.6 Red de Seguridad de Pruebas (Fase 0 → Fase 3)
 * **Golden Master (`GoldenMasterTests`):** Registra el estado completo de la generación procedimental (`MapGenerator` y `EncounterDirector`) para 12 semillas fijas mediante snapshots textuales deterministas y hashes criptográficos (SHA-256) de grillas y encuentros. Para regenerar o actualizar un snapshot intencionalmente: eliminar el archivo correspondiente en `Game.Tests/Snapshots/golden_<seed>.txt` y ejecutar la suite dos veces (la primera genera el archivo y falla requiriendo revisión, la segunda valida su coincidencia exacta).
 * **Tests de Cero-Allocaciones (`ZeroAllocationTests`):** Mediante `GC.GetAllocatedBytesForCurrentThread()` sobre fases medidas posteriores a un warmup y recolección forzada, valida que la emisión y actualización de partículas, movimiento/spawns de proyectiles, ciclo de enemigos activos (`EnemyManager.Update`), generadores y manipulación de `ObjectPool<T>` produzcan exactamente 0 bytes de alocación en el heap durante el game loop.
 * **Instrumentación de Consultas (`LevelManager`):** En compilaciones `DEBUG`, `LevelManager` mantiene contadores acumulativos de consultas de colisión (`CollisionQueryCount`), penetración (`PenetrationQueryCount`) y barrido (`SweepQueryCount`) que pueden reiniciarse mediante `ResetQueryCounters()`. Permite auditar y perfilar el costo de colisiones frame a frame sin impacto de rendimiento en producción (`Release`).
-* **Cobertura total verificada:** 124 pruebas pasando en Debug y 123 en Release (excluyendo únicamente la prueba de contadores bajo directiva `#if DEBUG`).
+* **Cobertura total verificada:** 140 pruebas pasando en Debug y 139 en Release (excluyendo únicamente la prueba de contadores bajo directiva `#if DEBUG`), con 0 warnings del compilador y analizadores.
+
+### 3.7 Optimización de Hotspots Baratos y Telemetría (Fase 3)
+* **Atlas de Glifos en `DebugConsole`:** La mini-fuente 5×7 genera una textura dinámica donde cada carácter ASCII mapea a un rectángulo fuente específico. El dibujado de texto emite exactamente 1 llamada `Draw` por carácter (en lugar de hasta 35 llamadas individuales por píxel activo).
+* **Contadores O(1) y `DeathVersion`:** `EnemyManager` y `SpawnerManager` mantienen contadores incrementales `_activeCount` que se actualizan en `Spawn`/`Register` y `DeactivateEnemy`/destrucción, eliminando recorridos lineales sobre los 1024 slots del pool. Adicionalmente, exponen una propiedad incremental `DeathVersion` que cambia cada vez que una entidad muere.
+* **Invalidación Condicional de Regiones (`ClearedRegionTracker`):** `Game1.UpdateClearedRegions` delega la comprobación a `ClearedRegionTracker`, omitiendo el escaneo costoso de regiones vivas si ni `EnemyManager.DeathVersion` ni `SpawnerManager.DeathVersion` han incrementado desde el último frame analizado.
+* **Detección de Impactos con Distancia Cuadrada:** `FindHit` en `EnemyManager` y `SpawnerManager` compara contra `(radius + enemyRadius)^2` utilizando `Vector2.DistanceSquared`, eliminando cálculos de `Math.Sqrt` para todas las entidades evaluadas.
+* **Cálculo Diferido de Normales en `RoundedContour.ClosestPoint`:** El bucle de búsqueda de la arista más cercana solo registra la arista/arco ganador mediante distancia escalar al cuadrado; la normal de superficie se evalúa una única vez tras finalizar la selección del ganador.
+* **Aserción de Integridad en `ObjectPool<T>`:** `Release(int index)` incorpora `Debug.Assert(_freeCount < _items.Length)` para atrapar liberaciones duplicadas (doble Release) en etapas de desarrollo sin penalización de rendimiento en compilaciones de producción (`Release`).
+* **Telemetría de Frame Time y Colisiones en HUD:** La barra de título (`Game1.UpdateDebugTitle`) promedia por intervalos de 0.5 s el tiempo de CPU en milisegundos de `Update` y `Draw` mediante `Stopwatch.GetTimestamp()`, junto con promedios por frame de consultas de colisión, penetración y barrido en modo `DEBUG`.
 
 

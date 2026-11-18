@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
@@ -39,13 +40,16 @@ namespace TwinStickShooter
         // Timers por jugador. Arrays fijos (MaxPlayers): cero allocations en Update().
         private readonly float[] _shootCooldown = new float[GameConstants.MaxPlayers];
         private readonly float[] _thrusterTimer = new float[GameConstants.MaxPlayers];
-        /// <summary>Regiones vacías registradas una sola vez para el progreso del nivel.</summary>
-        private readonly HashSet<int> _clearedRegions = new HashSet<int>();
+        /// <summary>Rastreador de regiones vacías para el progreso del nivel.</summary>
+        private readonly ClearedRegionTracker _clearedRegionTracker = new ClearedRegionTracker();
 
         // HUD de debug: acumuladores para no recalcular FPS cada frame (evita
         // formatear strings 60 veces por segundo).
         private float _fpsTimer;
         private int _frameCount;
+        private long _updateTicksAccumulated;
+        private long _drawTicksAccumulated;
+        private int _drawCount;
         private bool _previousF3Down;
         private bool _previousF4Down;
         private bool _previousF5Down;
@@ -116,6 +120,8 @@ namespace TwinStickShooter
         /// <summary>Actualiza input, jugadores, combate, efectos y HUD en cada tick.</summary>
         protected override void Update(GameTime gameTime)
         {
+            long updateStart = Stopwatch.GetTimestamp();
+
             float deltaTime = (float)gameTime.ElapsedGameTime.TotalSeconds;
 
             _inputManager.Update();
@@ -231,6 +237,7 @@ namespace TwinStickShooter
             UpdateClearedRegions();
             _particleSystem.Update(deltaTime);
 
+            _updateTicksAccumulated += Stopwatch.GetTimestamp() - updateStart;
             UpdateDebugTitle(gameTime);
 
             base.Update(gameTime);
@@ -279,16 +286,26 @@ namespace TwinStickShooter
         {
             if (_combatTestSceneActive) return;
 
+            int enemyDeathVersion = _enemyManager.DeathVersion;
+            int spawnerDeathVersion = _spawnerManager.DeathVersion;
+
+            if (!_clearedRegionTracker.ShouldCheck(enemyDeathVersion, spawnerDeathVersion))
+            {
+                return;
+            }
+
+            _clearedRegionTracker.RecordCheck(enemyDeathVersion, spawnerDeathVersion);
+
             IReadOnlyList<MapRegionDefinition> regions = _levelManager.MapGenerator.Regions;
             for (int i = 0; i < regions.Count; i++)
             {
                 MapRegionDefinition region = regions[i];
-                if (region.Id <= 0 || _clearedRegions.Contains(region.Id)) continue;
+                if (region.Id <= 0 || _clearedRegionTracker.IsCleared(region.Id)) continue;
                 if (_enemyManager.GetAliveCountInRegion(region.Id) > 0 ||
                     _spawnerManager.GetAliveCountInRegion(region.Id) > 0)
                     continue;
 
-                if (_clearedRegions.Add(region.Id))
+                if (_clearedRegionTracker.TryMarkCleared(region.Id))
                     SetDebugMessage($"{region.Kind} {region.Id} limpio");
             }
         }
@@ -326,6 +343,8 @@ namespace TwinStickShooter
 
         protected override void Draw(GameTime gameTime)
         {
+            long drawStart = Stopwatch.GetTimestamp();
+
             GraphicsDevice.Clear(Color.Black); // fondo negro
 
             Matrix viewMatrix = _camera.ViewMatrix;
@@ -347,6 +366,9 @@ namespace TwinStickShooter
             }
 
             base.Draw(gameTime);
+
+            _drawTicksAccumulated += Stopwatch.GetTimestamp() - drawStart;
+            _drawCount++;
         }
 
         /// <summary>
@@ -379,14 +401,40 @@ namespace TwinStickShooter
                 int activeParticles = CountActiveParticles(_particleSystem.Particles);
 
                 float fps = _frameCount / _fpsTimer;
+                double updateMs = (double)_updateTicksAccumulated * 1000.0 / (Stopwatch.Frequency * Math.Max(1, _frameCount));
+                double drawMs = (double)_drawTicksAccumulated * 1000.0 / (Stopwatch.Frequency * Math.Max(1, _drawCount));
+
+#if DEBUG
+                long colQueries = _levelManager != null ? _levelManager.CollisionQueryCount : 0;
+                long penQueries = _levelManager != null ? _levelManager.PenetrationQueryCount : 0;
+                long swpQueries = _levelManager != null ? _levelManager.SweepQueryCount : 0;
+                _levelManager?.ResetQueryCounters();
+                long frames = Math.Max(1, _frameCount);
+                long avgCol = colQueries / frames;
+                long avgPen = penQueries / frames;
+                long avgSwp = swpQueries / frames;
+
                 Window.Title =
-                    $"Twin-Stick Shooter | FPS: {fps:0} | Modo: {_currentGameState} | Mandos: {connected}/{GameConstants.MaxPlayers} " +
+                    $"Twin-Stick Shooter | FPS: {fps:0} | Upd: {updateMs:0.00}ms | Draw: {drawMs:0.00}ms " +
+                    $"| Col/f: {avgCol} | Pen/f: {avgPen} | Swp/f: {avgSwp} " +
+                    $"| Modo: {_currentGameState} | Mandos: {connected}/{GameConstants.MaxPlayers} " +
                     $"| Balas: {activeBullets}/{GameConstants.MaxBullets} " +
                     $"| Partículas: {activeParticles}/{GameConstants.MaxParticles} " +
                     $"| Zoom: {_camera.ViewMatrix.M11:0.00}";
+#else
+                Window.Title =
+                    $"Twin-Stick Shooter | FPS: {fps:0} | Upd: {updateMs:0.00}ms | Draw: {drawMs:0.00}ms " +
+                    $"| Modo: {_currentGameState} | Mandos: {connected}/{GameConstants.MaxPlayers} " +
+                    $"| Balas: {activeBullets}/{GameConstants.MaxBullets} " +
+                    $"| Partículas: {activeParticles}/{GameConstants.MaxParticles} " +
+                    $"| Zoom: {_camera.ViewMatrix.M11:0.00}";
+#endif
 
                 _fpsTimer = 0f;
                 _frameCount = 0;
+                _updateTicksAccumulated = 0;
+                _drawTicksAccumulated = 0;
+                _drawCount = 0;
             }
         }
 
@@ -503,7 +551,7 @@ namespace TwinStickShooter
         {
             _combatTestSceneActive = true;
             _levelCompleted = false;
-            _clearedRegions.Clear();
+            _clearedRegionTracker.Reset();
             _exitWaitingMessageShown = false;
             _levelManager.ConfigureCombatTestArena();
             _spawnerManager.Reset();
@@ -545,7 +593,7 @@ namespace TwinStickShooter
 
             _combatTestSceneActive = false;
             _levelCompleted = false;
-            _clearedRegions.Clear();
+            _clearedRegionTracker.Reset();
             _exitWaitingMessageShown = false;
             _spawnerManager.Reset();
             _enemyManager.Clear();

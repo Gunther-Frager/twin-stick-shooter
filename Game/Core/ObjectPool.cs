@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 namespace TwinStickShooter.Core
 {
     /// <summary>
@@ -58,6 +60,7 @@ namespace TwinStickShooter.Core
         /// <summary>Devuelve el índice al pool para que pueda reutilizarse.</summary>
         public void Release(int index)
         {
+            Debug.Assert(_freeCount < _items.Length, "ObjectPool.Release: _freeCount excede la capacidad del pool. Doble Release probable.");
             _freeStack[_freeCount++] = index;
         }
     }

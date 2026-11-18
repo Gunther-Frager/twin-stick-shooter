@@ -16,10 +16,28 @@ namespace TwinStickShooter.Core
         private readonly List<string> _messages = new List<string>();
         private SpriteBatch _spriteBatch;
         private Texture2D _pixel;
+        private Texture2D _glyphAtlas;
+        private Dictionary<char, Rectangle> _glyphRectangles;
         private bool _isVisible = true;
 
+        public readonly struct GlyphAtlasData
+        {
+            public int Width { get; }
+            public int Height { get; }
+            public Color[] Pixels { get; }
+            public Dictionary<char, Rectangle> SourceRectangles { get; }
+
+            public GlyphAtlasData(int width, int height, Color[] pixels, Dictionary<char, Rectangle> sourceRectangles)
+            {
+                Width = width;
+                Height = height;
+                Pixels = pixels;
+                SourceRectangles = sourceRectangles;
+            }
+        }
+
         // Mini font 5x7 definida por bitmasks (5 columnas de 7 bits)
-        private static readonly Dictionary<char, uint[]> FontData = new Dictionary<char, uint[]>
+        internal static readonly Dictionary<char, uint[]> FontData = new Dictionary<char, uint[]>
         {
             {'A', new uint[]{0x7E, 0x09, 0x09, 0x09, 0x7E}},
             {'B', new uint[]{0x7F, 0x49, 0x49, 0x49, 0x36}},
@@ -77,6 +95,46 @@ namespace TwinStickShooter.Core
             _spriteBatch = new SpriteBatch(graphicsDevice);
             _pixel = new Texture2D(graphicsDevice, 1, 1);
             _pixel.SetData(new[] { Color.White });
+
+            GlyphAtlasData atlasData = BuildAtlasData();
+            _glyphAtlas = new Texture2D(graphicsDevice, atlasData.Width, atlasData.Height);
+            _glyphAtlas.SetData(atlasData.Pixels);
+            _glyphRectangles = atlasData.SourceRectangles;
+        }
+
+        internal static GlyphAtlasData BuildAtlasData()
+        {
+            const int glyphWidth = 5;
+            const int glyphHeight = 7;
+            int totalGlyphs = FontData.Count;
+            int atlasWidth = totalGlyphs * glyphWidth;
+            int atlasHeight = glyphHeight;
+            var pixels = new Color[atlasWidth * atlasHeight];
+            var rects = new Dictionary<char, Rectangle>(totalGlyphs);
+
+            int index = 0;
+            foreach (var kvp in FontData)
+            {
+                char c = kvp.Key;
+                uint[] glyph = kvp.Value;
+                int startX = index * glyphWidth;
+                rects[c] = new Rectangle(startX, 0, glyphWidth, glyphHeight);
+
+                for (int col = 0; col < glyphWidth; col++)
+                {
+                    uint colMask = glyph[col];
+                    for (int row = 0; row < glyphHeight; row++)
+                    {
+                        bool on = (colMask & (1u << row)) != 0;
+                        int pixelX = startX + col;
+                        int pixelY = row;
+                        pixels[pixelY * atlasWidth + pixelX] = on ? Color.White : Color.Transparent;
+                    }
+                }
+                index++;
+            }
+
+            return new GlyphAtlasData(atlasWidth, atlasHeight, pixels, rects);
         }
 
         public void AddMessage(string message)
@@ -125,20 +183,13 @@ namespace TwinStickShooter.Core
 
         private void DrawString(string text, Vector2 pos, Color color)
         {
+            if (_glyphAtlas == null || _glyphRectangles == null) return;
+
             foreach (char c in text)
             {
-                if (FontData.TryGetValue(c, out uint[] glyph))
+                if (_glyphRectangles.TryGetValue(c, out Rectangle srcRect))
                 {
-                    for (int col = 0; col < 5; col++)
-                    {
-                        for (int row = 0; row < 7; row++)
-                        {
-                            if ((glyph[col] & (1 << row)) != 0)
-                            {
-                                _spriteBatch.Draw(_pixel, new Rectangle((int)pos.X + col, (int)pos.Y + row, 1, 1), color);
-                            }
-                        }
-                    }
+                    _spriteBatch.Draw(_glyphAtlas, new Rectangle((int)pos.X, (int)pos.Y, 5, 7), srcRect, color);
                 }
                 pos.X += CharWidth;
             }
